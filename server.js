@@ -24,11 +24,17 @@ app.use('/api/automations', require('./routes/automations'));
 
 const PORT = process.env.PORT || 5000;
 
-sequelize.sync({ alter: true }).then(() => {
-  console.log('Database connected & synced');
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+sequelize.authenticate()
+  .then(() => {
+    console.log('Database connection established.');
+    return sequelize.sync(); // Removed { alter: true } to prevent deadlocks on deployment
+  })
+  .then(() => {
+    console.log('Database synced');
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('Unable to connect to the database:', err);
   });
-}).catch(err => {
-  console.error('Unable to connect to the database:', err);
-});
