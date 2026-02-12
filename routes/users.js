@@ -27,6 +27,12 @@ const upload = multer({
   }
 });
 
+// @route   GET api/users/me
+// @desc    Get current user (Debug)
+router.get('/me', auth, (req, res) => {
+  res.json({ id: req.user.id, role: req.user.role });
+});
+
 // @route   GET api/users
 // @desc    Get all users
 router.get('/', auth, async (req, res) => {
@@ -64,8 +70,12 @@ router.post('/upload-avatar', auth, upload.single('avatar'), (req, res) => {
 router.put('/profile', auth, async (req, res) => {
   try {
     const { name, email, phone, address, avatar } = req.body;
+    console.log('Update profile for User ID:', req.user.id);
     const user = await User.findByPk(req.user.id);
-    if (!user) return res.status(404).json({ msg: 'User not found' });
+    if (!user) {
+      console.log('User not found in DB with ID:', req.user.id);
+      return res.status(404).json({ msg: 'User not found' });
+    }
 
     // If email is changing, check if new email is already taken
     if (email && email !== user.email) {
@@ -85,7 +95,7 @@ router.put('/profile', auth, async (req, res) => {
     await user.save();
     res.json(user);
   } catch (err) {
-    console.error(err);
+    console.error('Update profile error:', err);
     res.status(500).send('Server Error');
   }
 });
@@ -94,7 +104,17 @@ router.put('/profile', auth, async (req, res) => {
 router.put('/password', auth, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
+
+    // Validate password length
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ msg: 'Password must be at least 6 characters' });
+    }
+
     const user = await User.findByPk(req.user.id);
+    if (!user) {
+      console.log('User not found for password update ID:', req.user.id);
+      return res.status(404).json({ msg: 'User not found' });
+    }
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ msg: 'Incorrect current password' });
@@ -104,7 +124,7 @@ router.put('/password', auth, async (req, res) => {
 
     res.json({ msg: 'Password updated successfully' });
   } catch (err) {
-    console.error(err);
+    console.error('Update password error:', err);
     res.status(500).send('Server Error');
   }
 });

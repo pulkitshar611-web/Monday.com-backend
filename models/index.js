@@ -31,7 +31,7 @@ const User = sequelize.define('User', {
   address: { type: DataTypes.STRING },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
 }, {
-  tableName: 'board_users'
+  tableName: 'users'
 });
 
 const Board = sequelize.define('Board', {
@@ -41,20 +41,20 @@ const Board = sequelize.define('Board', {
   folder: { type: DataTypes.STRING, defaultValue: 'General' }, // Active Projects, Commercial, etc.
   columns: { type: DataTypes.JSON } // Store column definitions: [{id: 'status', title: 'Status', type: 'status'}, ...]
 }, {
-  tableName: 'board_boards'
+  tableName: 'boards'
 });
 
 const Folder = sequelize.define('Folder', {
   name: { type: DataTypes.STRING, allowNull: false }
 }, {
-  tableName: 'board_folders'
+  tableName: 'folders'
 });
 
 const Group = sequelize.define('Group', {
   title: { type: DataTypes.STRING, allowNull: false },
   color: { type: DataTypes.STRING }
 }, {
-  tableName: 'board_groups'
+  tableName: 'groups'
 });
 
 const Item = sequelize.define('Item', {
@@ -86,7 +86,7 @@ const Item = sequelize.define('Item', {
   parentItemId: { type: DataTypes.INTEGER, allowNull: true }, // For subitems
   subItemsData: { type: DataTypes.TEXT } // JSON string of subitems array (renamed to avoid collision with association)
 }, {
-  tableName: 'board_items'
+  tableName: 'items'
 });
 
 const Notification = sequelize.define('Notification', {
@@ -95,7 +95,7 @@ const Notification = sequelize.define('Notification', {
   type: { type: DataTypes.STRING },
   link: { type: DataTypes.STRING }
 }, {
-  tableName: 'board_notifications'
+  tableName: 'notifications'
 });
 
 const File = sequelize.define('File', {
@@ -105,7 +105,7 @@ const File = sequelize.define('File', {
   type: { type: DataTypes.STRING },
   uploadedBy: { type: DataTypes.STRING }
 }, {
-  tableName: 'board_files'
+  tableName: 'files'
 });
 
 const Form = sequelize.define('Form', {
@@ -114,7 +114,17 @@ const Form = sequelize.define('Form', {
   fields: { type: DataTypes.JSON }, // Store form structure as JSON
   isPublished: { type: DataTypes.BOOLEAN, defaultValue: false }
 }, {
-  tableName: 'board_forms'
+  tableName: 'forms'
+});
+
+const Automation = sequelize.define('Automation', {
+  trigger: { type: DataTypes.STRING, allowNull: false },
+  triggerValue: { type: DataTypes.STRING },
+  action: { type: DataTypes.STRING, allowNull: false },
+  actionValue: { type: DataTypes.STRING },
+  enabled: { type: DataTypes.BOOLEAN, defaultValue: true }
+}, {
+  tableName: 'automations'
 });
 
 // Associations
@@ -141,6 +151,9 @@ File.belongsTo(User, { foreignKey: 'userId' });
 Board.hasMany(Form, { foreignKey: 'BoardId', onDelete: 'CASCADE' });
 Form.belongsTo(Board, { foreignKey: 'BoardId' });
 
+User.hasMany(Automation, { foreignKey: 'UserId' });
+Automation.belongsTo(User, { foreignKey: 'UserId' });
+
 module.exports = {
   sequelize,
   User,
@@ -150,5 +163,6 @@ module.exports = {
   Item,
   Notification,
   File,
-  Form
+  Form,
+  Automation
 };
