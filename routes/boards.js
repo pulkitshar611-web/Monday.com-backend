@@ -12,14 +12,12 @@ router.get('/', auth, async (req, res) => {
       include: [{
         model: Group,
         as: 'Groups',
-        required: false, // Keep Groups even if empty, but filter them if they shouldn't exist?
-        // Actually, if we want to filter BOARDS, we should use required: !showAll on the items and groups.
+        required: false,
         include: [{
           model: Item,
           as: 'items',
           where: showAll ? {} : { assignedToId: req.user.id },
-          required: false, // Keep this false to let frontend handle empty groups if board is valid?
-          // No, if we want to filter the BOARD itself, we need at least one level to be required.
+          required: false,
           include: [
             { model: Item, as: 'subItems' },
             { model: User, as: 'assignedUser', attributes: ['name', 'email', 'avatar'] }
@@ -28,15 +26,30 @@ router.get('/', auth, async (req, res) => {
       }]
     });
 
-    // Filter boards in JS for better control if required: true is too noisy
+    // Defensive filtering: Ensure board.Groups exists before filtering
     const filteredBoards = showAll ? boards : boards.filter(board => {
-      return board.Groups.some(group => group.items && group.items.length > 0);
+      return board.Groups && board.Groups.some(group => group.items && group.items.length > 0);
     });
 
     res.json(filteredBoards);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    console.error('boards.js GET / error:', err);
+    res.status(500).json({
+      msg: 'Server error fetching boards',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// @route   GET api/boards/health
+// @desc    Check DB connection for boards
+router.get('/health', async (req, res) => {
+  try {
+    await Board.findOne();
+    res.json({ status: 'ok', msg: 'Database connection for Boards is healthy' });
+  } catch (err) {
+    console.error('Boards Health Check Failed:', err);
+    res.status(500).json({ status: 'error', error: err.message });
   }
 });
 

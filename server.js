@@ -4,6 +4,7 @@ dotenv.config();
 const express = require('express');
 const cors = require('cors');
 const { sequelize } = require('./models');
+const { DataTypes } = require('sequelize');
 
 const app = express();
 
@@ -25,9 +26,23 @@ app.use('/api/automations', require('./routes/automations'));
 const PORT = process.env.PORT || 5000;
 
 sequelize.authenticate()
-  .then(() => {
+  .then(async () => {
     console.log('Database connection established.');
-    return sequelize.sync(); // Removed { alter: true } to prevent deadlocks on deployment. Standard sync will still create new tables (like Automations).
+
+    // SAFE MIGRATION: Add columns if they are missing
+    const queryInterface = sequelize.getQueryInterface();
+    const tableInfo = await queryInterface.describeTable('items');
+
+    if (!tableInfo.expectedCloseDate) {
+      console.log('Adding missing column: expectedCloseDate');
+      await queryInterface.addColumn('items', 'expectedCloseDate', { type: DataTypes.STRING, allowNull: true });
+    }
+    if (!tableInfo.isUnread) {
+      console.log('Adding missing column: isUnread');
+      await queryInterface.addColumn('items', 'isUnread', { type: DataTypes.BOOLEAN, defaultValue: false });
+    }
+
+    return sequelize.sync();
   })
   .then(() => {
     console.log('Database synced');
