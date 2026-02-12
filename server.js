@@ -20,6 +20,7 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/files', require('./routes/files'));
 app.use('/api/forms', require('./routes/forms'));
+app.use('/api/automations', require('./routes/automations'));
 
 const PORT = process.env.PORT || 5000;
 
