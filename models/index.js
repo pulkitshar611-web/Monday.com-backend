@@ -9,6 +9,7 @@ const sequelize = new Sequelize(
   process.env.DB_PASS,
   {
     host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 3306,
     dialect: 'mysql',
     logging: false,
     pool: {
@@ -65,7 +66,15 @@ const Item = sequelize.define('Item', {
   dealStatus: { type: DataTypes.STRING }, // Lead, Negotiation, etc.
   invoiceSent: { type: DataTypes.BOOLEAN, defaultValue: false },
   aiModel: { type: DataTypes.STRING },
-  customFields: { type: DataTypes.JSON } // For any extra data
+  source: { type: DataTypes.STRING }, // Lead source e.g. Instagram, Website
+  urgency: { type: DataTypes.STRING }, // Priority e.g. Low, Medium, High
+  customFields: { type: DataTypes.JSON }, // For any extra data
+  // New fields for ItemDetailPanel tabs
+  updates: { type: DataTypes.TEXT }, // JSON string of updates array
+  filesData: { type: DataTypes.TEXT }, // JSON string of files array (renamed to avoid collision with association)
+  activity: { type: DataTypes.TEXT }, // JSON string of activity log array
+  parentItemId: { type: DataTypes.INTEGER, allowNull: true }, // For subitems
+  subItemsData: { type: DataTypes.TEXT } // JSON string of subitems array (renamed to avoid collision with association)
 });
 
 const Notification = sequelize.define('Notification', {
