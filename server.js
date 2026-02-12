@@ -27,7 +27,7 @@ const PORT = process.env.PORT || 5000;
 sequelize.authenticate()
   .then(() => {
     console.log('Database connection established.');
-    return sequelize.sync(); // Removed { alter: true } to prevent deadlocks on deployment
+    return sequelize.sync(); // Removed { alter: true } to prevent deadlocks on deployment. Standard sync will still create new tables (like Automations).
   })
   .then(() => {
     console.log('Database synced');
