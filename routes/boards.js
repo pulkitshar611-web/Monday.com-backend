@@ -68,4 +68,27 @@ router.post('/:id/groups', auth, async (req, res) => {
   }
 });
 
+// @route   PATCH api/boards/:id
+router.patch('/:id', auth, async (req, res) => {
+  try {
+    const board = await Board.findByPk(req.params.id);
+    if (!board) return res.status(404).json({ msg: 'Board not found' });
+
+    // Allow updating columns
+    if (req.body.columns) {
+      board.columns = req.body.columns;
+    }
+
+    // Allow updating other fields if needed
+    if (req.body.name) board.name = req.body.name;
+    if (req.body.type) board.type = req.body.type;
+
+    await board.save();
+    res.json(board);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+});
+
 module.exports = router;

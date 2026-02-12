@@ -76,6 +76,8 @@ const Item = sequelize.define('Item', {
   aiModel: { type: DataTypes.STRING },
   source: { type: DataTypes.STRING }, // Lead source e.g. Instagram, Website
   urgency: { type: DataTypes.STRING }, // Priority e.g. Low, Medium, High
+  expectedCloseDate: { type: DataTypes.STRING },
+  isUnread: { type: DataTypes.BOOLEAN, defaultValue: false },
   customFields: { type: DataTypes.JSON }, // For any extra data
   // New fields for ItemDetailPanel tabs
   updates: { type: DataTypes.TEXT }, // JSON string of updates array

@@ -1,46 +1,62 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { Board, Item, Group, User } = require('../models');
+const { Board, Item, Group, User, File, Form } = require('../models');
 const { Op } = require('sequelize');
 
 // @route   GET api/search
-// @desc    Search across all boards and items
+// @desc    Search across all boards, items, users, files, forms
 router.get('/', auth, async (req, res) => {
   const { q } = req.query;
-  if (!q) return res.json({ boards: [], items: [], users: [] });
+  if (!q) return res.json({ boards: [], items: [], users: [], files: [], forms: [] });
 
   try {
-    const boards = await Board.findAll({
-      where: {
-        name: { [Op.like]: `%${q}%` }
-      }
-    });
+    const searchOp = { [Op.like]: `%${q}%` };
 
-    const items = await Item.findAll({
-      where: {
-        name: { [Op.like]: `%${q}%` },
-        assignedToId: req.user.id
-      },
-      include: [
-        {
-          model: Group,
-          include: [{ model: Board }]
-        }
-      ]
-    });
+    const [boards, items, users, files, forms] = await Promise.all([
+      // Search Boards
+      Board.findAll({
+        where: { name: searchOp },
+        attributes: ['id', 'name', 'workspace', 'type']
+      }),
 
-    const users = await User.findAll({
-      where: {
-        [Op.or]: [
-          { name: { [Op.like]: `%${q}%` } },
-          { email: { [Op.like]: `%${q}%` } }
-        ]
-      },
-      attributes: ['id', 'name', 'email', 'avatar', 'role']
-    });
+      // Search Items (removed assignedToId restriction to like global search)
+      Item.findAll({
+        where: { name: searchOp },
+        include: [
+          {
+            model: Group,
+            include: [{ model: Board, attributes: ['id', 'name'] }]
+          }
+        ],
+        limit: 20 // Limit to prevent massive payloads
+      }),
 
-    res.json({ boards, items, users });
+      // Search Users
+      User.findAll({
+        where: {
+          [Op.or]: [
+            { name: searchOp },
+            { email: searchOp }
+          ]
+        },
+        attributes: ['id', 'name', 'email', 'avatar', 'role']
+      }),
+
+      // Search Files
+      File.findAll({
+        where: { name: searchOp },
+        limit: 20
+      }),
+
+      // Search Forms
+      Form.findAll({
+        where: { title: searchOp },
+        include: [{ model: Board, attributes: ['id', 'name'] }]
+      })
+    ]);
+
+    res.json({ boards, items, users, files, forms });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
