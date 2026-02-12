@@ -30,6 +30,8 @@ const User = sequelize.define('User', {
   phone: { type: DataTypes.STRING },
   address: { type: DataTypes.STRING },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+}, {
+  tableName: 'board_users'
 });
 
 const Board = sequelize.define('Board', {
@@ -38,15 +40,21 @@ const Board = sequelize.define('Board', {
   workspace: { type: DataTypes.STRING, defaultValue: 'Main Workspace' },
   folder: { type: DataTypes.STRING, defaultValue: 'General' }, // Active Projects, Commercial, etc.
   columns: { type: DataTypes.JSON } // Store column definitions: [{id: 'status', title: 'Status', type: 'status'}, ...]
+}, {
+  tableName: 'board_boards'
 });
 
 const Folder = sequelize.define('Folder', {
   name: { type: DataTypes.STRING, allowNull: false }
+}, {
+  tableName: 'board_folders'
 });
 
 const Group = sequelize.define('Group', {
   title: { type: DataTypes.STRING, allowNull: false },
   color: { type: DataTypes.STRING }
+}, {
+  tableName: 'board_groups'
 });
 
 const Item = sequelize.define('Item', {
@@ -75,6 +83,8 @@ const Item = sequelize.define('Item', {
   activity: { type: DataTypes.TEXT }, // JSON string of activity log array
   parentItemId: { type: DataTypes.INTEGER, allowNull: true }, // For subitems
   subItemsData: { type: DataTypes.TEXT } // JSON string of subitems array (renamed to avoid collision with association)
+}, {
+  tableName: 'board_items'
 });
 
 const Notification = sequelize.define('Notification', {
@@ -82,6 +92,8 @@ const Notification = sequelize.define('Notification', {
   isRead: { type: DataTypes.BOOLEAN, defaultValue: false },
   type: { type: DataTypes.STRING },
   link: { type: DataTypes.STRING }
+}, {
+  tableName: 'board_notifications'
 });
 
 const File = sequelize.define('File', {
@@ -90,6 +102,8 @@ const File = sequelize.define('File', {
   size: { type: DataTypes.INTEGER },
   type: { type: DataTypes.STRING },
   uploadedBy: { type: DataTypes.STRING }
+}, {
+  tableName: 'board_files'
 });
 
 const Form = sequelize.define('Form', {
@@ -97,17 +111,19 @@ const Form = sequelize.define('Form', {
   description: { type: DataTypes.STRING },
   fields: { type: DataTypes.JSON }, // Store form structure as JSON
   isPublished: { type: DataTypes.BOOLEAN, defaultValue: false }
+}, {
+  tableName: 'board_forms'
 });
 
 // Associations
-User.hasMany(Notification);
-Notification.belongsTo(User);
+User.hasMany(Notification, { foreignKey: 'UserId' });
+Notification.belongsTo(User, { foreignKey: 'UserId' });
 
-Board.hasMany(Group, { as: 'Groups', onDelete: 'CASCADE' });
-Group.belongsTo(Board);
+Board.hasMany(Group, { as: 'Groups', foreignKey: 'BoardId', onDelete: 'CASCADE' });
+Group.belongsTo(Board, { foreignKey: 'BoardId' });
 
-Group.hasMany(Item, { as: 'items', onDelete: 'CASCADE' });
-Item.belongsTo(Group);
+Group.hasMany(Item, { as: 'items', foreignKey: 'GroupId', onDelete: 'CASCADE' });
+Item.belongsTo(Group, { foreignKey: 'GroupId' });
 
 Item.hasMany(Item, { as: 'subItems', foreignKey: 'parentItemId', onDelete: 'CASCADE' });
 Item.belongsTo(Item, { as: 'parentItem', foreignKey: 'parentItemId' });
@@ -115,13 +131,13 @@ Item.belongsTo(Item, { as: 'parentItem', foreignKey: 'parentItemId' });
 User.hasMany(Item, { foreignKey: 'assignedToId' });
 Item.belongsTo(User, { as: 'assignedUser', foreignKey: 'assignedToId' });
 
-Item.hasMany(File, { as: 'files', onDelete: 'CASCADE' });
-File.belongsTo(Item);
+Item.hasMany(File, { as: 'files', foreignKey: 'ItemId', onDelete: 'CASCADE' });
+File.belongsTo(Item, { foreignKey: 'ItemId' });
 User.hasMany(File, { foreignKey: 'userId', onDelete: 'CASCADE' });
 File.belongsTo(User, { foreignKey: 'userId' });
 
-Board.hasMany(Form, { onDelete: 'CASCADE' });
-Form.belongsTo(Board);
+Board.hasMany(Form, { foreignKey: 'BoardId', onDelete: 'CASCADE' });
+Form.belongsTo(Board, { foreignKey: 'BoardId' });
 
 module.exports = {
   sequelize,
