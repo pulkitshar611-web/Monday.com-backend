@@ -9,12 +9,28 @@ const { User } = require('../models');
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
+  console.log('[LOGIN] Request received:', { email, passwordProvided: !!password });
+
+  // Validate input
+  if (!email || !password) {
+    console.log('[LOGIN] Missing email or password');
+    return res.status(400).json({ msg: 'Please provide both email and password' });
+  }
+
   try {
     let user = await User.findOne({ where: { email } });
-    if (!user) return res.status(400).json({ msg: 'Invalid Credentials' });
+    console.log('[LOGIN] User lookup result:', user ? `Found user: ${user.email}` : 'User not found');
+
+    if (!user) {
+      return res.status(400).json({ msg: 'Invalid Credentials' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ msg: 'Invalid Credentials' });
+    console.log('[LOGIN] Password match:', isMatch);
+
+    if (!isMatch) {
+      return res.status(400).json({ msg: 'Invalid Credentials' });
+    }
 
     const payload = {
       user: {
@@ -24,7 +40,11 @@ router.post('/login', async (req, res) => {
     };
 
     jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '10h' }, (err, token) => {
-      if (err) throw err;
+      if (err) {
+        console.error('[LOGIN] JWT signing error:', err);
+        throw err;
+      }
+      console.log('[LOGIN] Login successful for:', user.email);
       res.json({
         token,
         user: {
@@ -37,7 +57,7 @@ router.post('/login', async (req, res) => {
       });
     });
   } catch (err) {
-    console.error(err.message);
+    console.error('[LOGIN] Server error:', err.message);
     res.status(500).send('Server error');
   }
 });

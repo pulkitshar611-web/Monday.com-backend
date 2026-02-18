@@ -67,6 +67,7 @@ const Item = sequelize.define('Item', {
   receivedDate: { type: DataTypes.STRING },
   progress: { type: DataTypes.INTEGER, defaultValue: 0 },
   timeTracking: { type: DataTypes.STRING, defaultValue: '00:00:00' },
+  plannedTime: { type: DataTypes.STRING, defaultValue: '00:00:00' },
   payment: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
   isSubItem: { type: DataTypes.BOOLEAN, defaultValue: false },
   // Flexible fields
@@ -78,7 +79,9 @@ const Item = sequelize.define('Item', {
   aiModel: { type: DataTypes.STRING },
   source: { type: DataTypes.STRING }, // Lead source e.g. Instagram, Website
   urgency: { type: DataTypes.STRING }, // Priority e.g. Low, Medium, High
-  expectedCloseDate: { type: DataTypes.STRING },
+  expectedSubmissionDate: { type: DataTypes.STRING },
+  revisionDates: { type: DataTypes.STRING },
+  comments: { type: DataTypes.TEXT },
   isUnread: { type: DataTypes.BOOLEAN, defaultValue: false },
   customFields: { type: DataTypes.JSON }, // For any extra data
   // New fields for ItemDetailPanel tabs
@@ -86,7 +89,8 @@ const Item = sequelize.define('Item', {
   filesData: { type: DataTypes.TEXT }, // JSON string of files array (renamed to avoid collision with association)
   activity: { type: DataTypes.TEXT }, // JSON string of activity log array
   parentItemId: { type: DataTypes.INTEGER, allowNull: true }, // For subitems
-  subItemsData: { type: DataTypes.TEXT } // JSON string of subitems array (renamed to avoid collision with association)
+  subItemsData: { type: DataTypes.TEXT }, // JSON string of subitems array (renamed to avoid collision with association)
+  connectTasks: { type: DataTypes.TEXT } // JSON string of connected tasks
 }, {
   tableName: 'items'
 });
