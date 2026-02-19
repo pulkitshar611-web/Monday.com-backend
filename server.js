@@ -85,6 +85,66 @@ sequelize.authenticate()
         console.log('Adding missing column: connectTasks');
         await queryInterface.addColumn('items', 'connectTasks', { type: DataTypes.TEXT, allowNull: true });
       }
+      if (!tableInfo.dateSubmitted) {
+        console.log('Adding missing column: dateSubmitted');
+        await queryInterface.addColumn('items', 'dateSubmitted', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!tableInfo.comments2) {
+        console.log('Adding missing column: comments2');
+        await queryInterface.addColumn('items', 'comments2', { type: DataTypes.TEXT, allowNull: true });
+      }
+      if (!tableInfo.people) {
+        console.log('Adding missing column: people');
+        await queryInterface.addColumn('items', 'people', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!tableInfo.itemIdSerial) {
+        console.log('Adding missing column: itemIdSerial');
+        await queryInterface.addColumn('items', 'itemIdSerial', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!tableInfo.subitems) {
+        console.log('Adding missing column: subitems');
+        await queryInterface.addColumn('items', 'subitems', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!tableInfo.dealStatus) {
+        console.log('Adding missing column: dealStatus');
+        await queryInterface.addColumn('items', 'dealStatus', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!tableInfo.invoiceSent) {
+        console.log('Adding missing column: invoiceSent');
+        await queryInterface.addColumn('items', 'invoiceSent', { type: DataTypes.BOOLEAN, defaultValue: false });
+      }
+      if (!tableInfo.aiModel) {
+        console.log('Adding missing column: aiModel');
+        await queryInterface.addColumn('items', 'aiModel', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!tableInfo.customFields) {
+        console.log('Adding missing column: customFields');
+        await queryInterface.addColumn('items', 'customFields', { type: DataTypes.JSON, allowNull: true });
+      }
+      if (!tableInfo.updates) {
+        console.log('Adding missing column: updates');
+        await queryInterface.addColumn('items', 'updates', { type: DataTypes.TEXT, allowNull: true });
+      }
+      if (!tableInfo.filesData) {
+        console.log('Adding missing column: filesData');
+        await queryInterface.addColumn('items', 'filesData', { type: DataTypes.TEXT, allowNull: true });
+      }
+      if (!tableInfo.activity) {
+        console.log('Adding missing column: activity');
+        await queryInterface.addColumn('items', 'activity', { type: DataTypes.TEXT, allowNull: true });
+      }
+      if (!tableInfo.subItemsData) {
+        console.log('Adding missing column: subItemsData');
+        await queryInterface.addColumn('items', 'subItemsData', { type: DataTypes.TEXT, allowNull: true });
+      }
+      if (!tableInfo.parentItemId) {
+        console.log('Adding missing column: parentItemId');
+        await queryInterface.addColumn('items', 'parentItemId', { type: DataTypes.INTEGER, allowNull: true });
+      }
+      if (!tableInfo.payment) {
+        console.log('Adding missing column: payment');
+        await queryInterface.addColumn('items', 'payment', { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 });
+      }
 
       console.log('✅ All column migrations completed successfully.');
     } catch (error) {
