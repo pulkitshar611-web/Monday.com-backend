@@ -80,9 +80,14 @@ const Item = sequelize.define('Item', {
   source: { type: DataTypes.STRING }, // Lead source e.g. Instagram, Website
   urgency: { type: DataTypes.STRING }, // Priority e.g. Low, Medium, High
   expectedSubmissionDate: { type: DataTypes.STRING },
+  dateSubmitted: { type: DataTypes.STRING }, // New field
+  subitems: { type: DataTypes.STRING }, // New field for text representation
   revisionDates: { type: DataTypes.STRING },
   comments: { type: DataTypes.TEXT },
+  comments2: { type: DataTypes.TEXT }, // New field
   isUnread: { type: DataTypes.BOOLEAN, defaultValue: false },
+  people: { type: DataTypes.STRING }, // New field
+  itemIdSerial: { type: DataTypes.STRING }, // New field (auto-generated in CSV)
   customFields: { type: DataTypes.JSON }, // For any extra data
   // New fields for ItemDetailPanel tabs
   updates: { type: DataTypes.TEXT }, // JSON string of updates array
