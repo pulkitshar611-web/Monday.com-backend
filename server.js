@@ -145,6 +145,18 @@ sequelize.authenticate()
         console.log('Adding missing column: payment');
         await queryInterface.addColumn('items', 'payment', { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 });
       }
+      if (!tableInfo.phone) {
+        console.log('Adding missing column: phone');
+        await queryInterface.addColumn('items', 'phone', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!tableInfo.location) {
+        console.log('Adding missing column: location');
+        await queryInterface.addColumn('items', 'location', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!tableInfo.link) {
+        console.log('Adding missing column: link');
+        await queryInterface.addColumn('items', 'link', { type: DataTypes.TEXT, allowNull: true });
+      }
 
       console.log('✅ All column migrations completed successfully.');
     } catch (error) {

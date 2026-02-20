@@ -95,7 +95,10 @@ const Item = sequelize.define('Item', {
   activity: { type: DataTypes.TEXT }, // JSON string of activity log array
   parentItemId: { type: DataTypes.INTEGER, allowNull: true }, // For subitems
   subItemsData: { type: DataTypes.TEXT }, // JSON string of subitems array (renamed to avoid collision with association)
-  connectTasks: { type: DataTypes.TEXT } // JSON string of connected tasks
+  connectTasks: { type: DataTypes.TEXT }, // JSON string of connected tasks
+  phone: { type: DataTypes.STRING },
+  location: { type: DataTypes.STRING },
+  link: { type: DataTypes.TEXT } // Store as {url, text} JSON string
 }, {
   tableName: 'items'
 });

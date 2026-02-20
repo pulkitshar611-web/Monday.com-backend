@@ -27,11 +27,25 @@ router.get('/my', auth, async (req, res) => {
 // @route   POST api/items
 router.post('/', auth, async (req, res) => {
   try {
+    // Filter updates: fields in the model go to the root, others to customFields
+    const modelFields = Object.keys(Item.rawAttributes);
+    const updates = {};
+    const customFields = {};
+
+    for (const [key, value] of Object.entries(req.body)) {
+      if (modelFields.includes(key)) {
+        updates[key] = value;
+      } else {
+        customFields[key] = value;
+      }
+    }
+
     const itemData = {
-      ...req.body,
-      assignedToId: req.body.assignedToId || req.user.id,
-      receivedDate: req.body.receivedDate || new Date().toISOString(),
-      status: req.body.status || 'Working on it'
+      ...updates,
+      customFields: Object.keys(customFields).length > 0 ? customFields : null,
+      assignedToId: updates.assignedToId || req.user.id,
+      receivedDate: updates.receivedDate || new Date().toISOString(),
+      status: updates.status || 'Working on it'
     };
 
     const item = await Item.create(itemData);
@@ -61,7 +75,41 @@ router.patch('/:id', auth, async (req, res) => {
 
     const oldAssigneeId = item.assignedToId;
     const oldStatus = item.status;
-    await item.update(req.body);
+
+    // Filter updates: fields in the model go to the root, others to customFields
+    const modelFields = Object.keys(Item.rawAttributes);
+    const updates = {};
+
+    // Parse existing customFields if it's a string
+    let customFields = item.customFields || {};
+    if (typeof customFields === 'string') {
+      try {
+        customFields = JSON.parse(customFields);
+      } catch (e) {
+        customFields = {};
+      }
+    } else {
+      // It's already an object, spread it to clone
+      customFields = { ...customFields };
+    }
+
+    let hasCustomUpdates = false;
+
+    for (const [key, value] of Object.entries(req.body)) {
+      if (modelFields.includes(key)) {
+        updates[key] = value;
+      } else {
+        // Stash unknown/dynamic fields in customFields
+        customFields[key] = value;
+        hasCustomUpdates = true;
+      }
+    }
+
+    if (hasCustomUpdates) {
+      updates.customFields = customFields;
+    }
+
+    await item.update(updates);
 
     // If assignment changed, notify new user
     if (req.body.assignedToId && req.body.assignedToId !== oldAssigneeId) {
