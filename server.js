@@ -42,128 +42,50 @@ sequelize.authenticate()
     try {
       const queryInterface = sequelize.getQueryInterface();
       const tableInfo = await queryInterface.describeTable('items');
+      const itemColumns = Object.keys(tableInfo).map(k => k.toLowerCase());
 
-      if (!tableInfo.expectedSubmissionDate) {
-        console.log('Adding missing column: expectedSubmissionDate');
-        await queryInterface.addColumn('items', 'expectedSubmissionDate', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.revisionDates) {
-        console.log('Adding missing column: revisionDates');
-        await queryInterface.addColumn('items', 'revisionDates', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.comments) {
-        console.log('Adding missing column: comments');
-        await queryInterface.addColumn('items', 'comments', { type: DataTypes.TEXT, allowNull: true });
-      }
-      if (!tableInfo.plannedTime) {
-        console.log('Adding missing column: plannedTime');
-        await queryInterface.addColumn('items', 'plannedTime', { type: DataTypes.STRING, defaultValue: '00:00:00' });
-      }
-      if (!tableInfo.isUnread) {
-        console.log('Adding missing column: isUnread');
-        await queryInterface.addColumn('items', 'isUnread', { type: DataTypes.BOOLEAN, defaultValue: false });
-      }
-      if (!tableInfo.source) {
-        console.log('Adding missing column: source');
-        await queryInterface.addColumn('items', 'source', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.urgency) {
-        console.log('Adding missing column: urgency');
-        await queryInterface.addColumn('items', 'urgency', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.dealValue) {
-        console.log('Adding missing column: dealValue');
-        await queryInterface.addColumn('items', 'dealValue', { type: DataTypes.DECIMAL(10, 2), allowNull: true });
-      }
-      if (!tableInfo.risk) {
-        console.log('Adding missing column: risk');
-        await queryInterface.addColumn('items', 'risk', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.priority) {
-        console.log('Adding missing column: priority');
-        await queryInterface.addColumn('items', 'priority', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.connectTasks) {
-        console.log('Adding missing column: connectTasks');
-        await queryInterface.addColumn('items', 'connectTasks', { type: DataTypes.TEXT, allowNull: true });
-      }
-      if (!tableInfo.dateSubmitted) {
-        console.log('Adding missing column: dateSubmitted');
-        await queryInterface.addColumn('items', 'dateSubmitted', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.comments2) {
-        console.log('Adding missing column: comments2');
-        await queryInterface.addColumn('items', 'comments2', { type: DataTypes.TEXT, allowNull: true });
-      }
-      if (!tableInfo.people) {
-        console.log('Adding missing column: people');
-        await queryInterface.addColumn('items', 'people', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.itemIdSerial) {
-        console.log('Adding missing column: itemIdSerial');
-        await queryInterface.addColumn('items', 'itemIdSerial', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.subitems) {
-        console.log('Adding missing column: subitems');
-        await queryInterface.addColumn('items', 'subitems', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.dealStatus) {
-        console.log('Adding missing column: dealStatus');
-        await queryInterface.addColumn('items', 'dealStatus', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.invoiceSent) {
-        console.log('Adding missing column: invoiceSent');
-        await queryInterface.addColumn('items', 'invoiceSent', { type: DataTypes.BOOLEAN, defaultValue: false });
-      }
-      if (!tableInfo.aiModel) {
-        console.log('Adding missing column: aiModel');
-        await queryInterface.addColumn('items', 'aiModel', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.customFields) {
-        console.log('Adding missing column: customFields');
-        await queryInterface.addColumn('items', 'customFields', { type: DataTypes.JSON, allowNull: true });
-      }
-      if (!tableInfo.updates) {
-        console.log('Adding missing column: updates');
-        await queryInterface.addColumn('items', 'updates', { type: DataTypes.TEXT, allowNull: true });
-      }
-      if (!tableInfo.filesData) {
-        console.log('Adding missing column: filesData');
-        await queryInterface.addColumn('items', 'filesData', { type: DataTypes.TEXT, allowNull: true });
-      }
-      if (!tableInfo.activity) {
-        console.log('Adding missing column: activity');
-        await queryInterface.addColumn('items', 'activity', { type: DataTypes.TEXT, allowNull: true });
-      }
-      if (!tableInfo.subItemsData) {
-        console.log('Adding missing column: subItemsData');
-        await queryInterface.addColumn('items', 'subItemsData', { type: DataTypes.TEXT, allowNull: true });
-      }
-      if (!tableInfo.parentItemId) {
-        console.log('Adding missing column: parentItemId');
-        await queryInterface.addColumn('items', 'parentItemId', { type: DataTypes.INTEGER, allowNull: true });
-      }
-      if (!tableInfo.payment) {
-        console.log('Adding missing column: payment');
-        await queryInterface.addColumn('items', 'payment', { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 });
-      }
-      if (!tableInfo.phone) {
-        console.log('Adding missing column: phone');
-        await queryInterface.addColumn('items', 'phone', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.location) {
-        console.log('Adding missing column: location');
-        await queryInterface.addColumn('items', 'location', { type: DataTypes.STRING, allowNull: true });
-      }
-      if (!tableInfo.link) {
-        console.log('Adding missing column: link');
-        await queryInterface.addColumn('items', 'link', { type: DataTypes.TEXT, allowNull: true });
-      }
+      const addCol = async (col, type, def = undefined) => {
+        if (!itemColumns.includes(col.toLowerCase())) {
+          console.log(`Adding missing column: ${col}`);
+          const options = { type, allowNull: true };
+          if (def !== undefined) options.defaultValue = def;
+          await queryInterface.addColumn('items', col, options);
+        }
+      };
+
+      await addCol('expectedSubmissionDate', DataTypes.STRING);
+      await addCol('revisionDates', DataTypes.STRING);
+      await addCol('comments', DataTypes.TEXT);
+      await addCol('plannedTime', DataTypes.STRING, '00:00:00');
+      await addCol('isUnread', DataTypes.BOOLEAN, false);
+      await addCol('source', DataTypes.STRING);
+      await addCol('urgency', DataTypes.STRING);
+      await addCol('dealValue', DataTypes.DECIMAL(10, 2));
+      await addCol('risk', DataTypes.STRING);
+      await addCol('priority', DataTypes.STRING);
+      await addCol('connectTasks', DataTypes.TEXT);
+      await addCol('dateSubmitted', DataTypes.STRING);
+      await addCol('comments2', DataTypes.TEXT);
+      await addCol('people', DataTypes.STRING);
+      await addCol('itemIdSerial', DataTypes.STRING);
+      await addCol('subitems', DataTypes.STRING);
+      await addCol('dealStatus', DataTypes.STRING);
+      await addCol('invoiceSent', DataTypes.BOOLEAN, false);
+      await addCol('aiModel', DataTypes.STRING);
+      await addCol('customFields', DataTypes.JSON);
+      await addCol('updates', DataTypes.TEXT);
+      await addCol('filesData', DataTypes.TEXT);
+      await addCol('activity', DataTypes.TEXT);
+      await addCol('subItemsData', DataTypes.TEXT);
+      await addCol('parentItemId', DataTypes.INTEGER);
+      await addCol('payment', DataTypes.DECIMAL(10, 2), 0.00);
+      await addCol('phone', DataTypes.STRING);
+      await addCol('location', DataTypes.STRING);
+      await addCol('link', DataTypes.TEXT);
 
       // Ensure assignedToId is STRING (it might be INT from earlier versions/defaults)
-      if (tableInfo.assignedToId) {
-        // Proactively remove any foreign key constraints if we are changing type, 
-        // as MySQL blocks type changes on columns that are part of a foreign key.
+      if (itemColumns.includes('assignedtoid')) {
+        // Proactively remove any foreign key constraints if we are changing type
         try {
           const [constraints] = await sequelize.query(`
             SELECT CONSTRAINT_NAME 
@@ -179,9 +101,11 @@ sequelize.authenticate()
               await sequelize.query(`ALTER TABLE items DROP FOREIGN KEY ${c.CONSTRAINT_NAME}`).catch(() => { });
             }
           }
-        } catch (err) { console.log('Note: Error checking/dropping constraints (safe to ignore if none exist)'); }
+        } catch (err) { }
 
-        if (tableInfo.assignedToId.type.toLowerCase().includes('int')) {
+        // Find the actual case sensitive key
+        const actualKey = Object.keys(tableInfo).find(k => k.toLowerCase() === 'assignedtoid');
+        if (tableInfo[actualKey].type.toLowerCase().includes('int')) {
           console.log('Migrating assignedToId from INT to STRING to support Team IDs');
           await queryInterface.changeColumn('items', 'assignedToId', { type: DataTypes.STRING, allowNull: true });
         }
@@ -190,41 +114,56 @@ sequelize.authenticate()
       console.log('✅ All column migrations completed successfully.');
     } catch (error) {
       console.warn('⚠️  Table migration skipped (items table may not exist yet):', error.message);
-      console.log('💡 If this is a fresh installation, please import the database schema first.');
     }
 
     // Boards Migrations
     try {
       const queryInterface2 = sequelize.getQueryInterface();
       const boardTableInfo = await queryInterface2.describeTable('boards');
-      if (!boardTableInfo.isFavorite) {
+      const boardColumns = Object.keys(boardTableInfo).map(k => k.toLowerCase());
+
+      if (!boardColumns.includes('isfavorite')) {
         console.log('Adding missing column: isFavorite to boards');
         await queryInterface2.addColumn('boards', 'isFavorite', { type: DataTypes.BOOLEAN, defaultValue: false });
       }
-      if (!boardTableInfo.isArchived) {
+      if (!boardColumns.includes('isarchived')) {
         console.log('Adding missing column: isArchived to boards');
         await queryInterface2.addColumn('boards', 'isArchived', { type: DataTypes.BOOLEAN, defaultValue: false });
       }
-      if (!boardTableInfo.viewConfig) {
+      if (!boardColumns.includes('viewconfig')) {
         console.log('Adding missing column: viewConfig to boards');
         await queryInterface2.addColumn('boards', 'viewConfig', { type: DataTypes.TEXT, allowNull: true });
       }
       console.log('✅ Boards table migrations completed successfully.');
     } catch (error) {
-      console.warn('⚠️  Boards table migration skipped (boards table may not exist yet):', error.message);
+      console.warn('⚠️  Boards table migration skipped:', error.message);
     }
 
     // Users Migrations
     try {
       const queryInterface3 = sequelize.getQueryInterface();
       const userTableInfo = await queryInterface3.describeTable('users');
-      if (!userTableInfo.roleId) {
+      const userColumns = Object.keys(userTableInfo).map(k => k.toLowerCase());
+
+      if (!userColumns.includes('roleid')) {
         console.log('Adding missing column: roleId to users');
         await queryInterface3.addColumn('users', 'roleId', { type: DataTypes.INTEGER, allowNull: true });
       }
-      if (!userTableInfo.permissions) {
+      if (!userColumns.includes('permissions')) {
         console.log('Adding missing column: permissions to users');
         await queryInterface3.addColumn('users', 'permissions', { type: DataTypes.JSON, allowNull: true });
+      }
+      if (!userColumns.includes('phone')) {
+        console.log('Adding missing column: phone to users');
+        await queryInterface3.addColumn('users', 'phone', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!userColumns.includes('address')) {
+        console.log('Adding missing column: address to users');
+        await queryInterface3.addColumn('users', 'address', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!userColumns.includes('status')) {
+        console.log('Adding missing column: status to users');
+        await queryInterface3.addColumn('users', 'status', { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' });
       }
 
       // Convert role from ENUM to STRING to allow custom roles (Viewer, Guest, etc.)
@@ -235,7 +174,22 @@ sequelize.authenticate()
 
       console.log('✅ Users table migrations completed successfully.');
     } catch (error) {
-      console.warn('⚠️  Users table migration skipped:', error.message);
+      console.warn('⚠️  Users table migration skipped or failed:', error.message);
+    }
+
+    // Roles Migrations
+    try {
+      const queryInterface4 = sequelize.getQueryInterface();
+      const roleTableInfo = await queryInterface4.describeTable('roles');
+      const roleColumns = Object.keys(roleTableInfo).map(k => k.toLowerCase());
+
+      if (!roleColumns.includes('permissions')) {
+        console.log('Adding missing column: permissions to roles');
+        await queryInterface4.addColumn('roles', 'permissions', { type: DataTypes.JSON, allowNull: true });
+      }
+      console.log('✅ Roles table migrations completed successfully.');
+    } catch (error) {
+      console.warn('⚠️  Roles table migration skipped or failed:', error.message);
     }
 
     return sequelize.sync();

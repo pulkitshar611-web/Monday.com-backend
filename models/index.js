@@ -42,7 +42,8 @@ const Board = sequelize.define('Board', {
   folder: { type: DataTypes.STRING, defaultValue: 'General' }, // Active Projects, Commercial, etc.
   columns: { type: DataTypes.JSON }, // Store column definitions: [{id: 'status', title: 'Status', type: 'status'}, ...]
   isFavorite: { type: DataTypes.BOOLEAN, defaultValue: false },
-  isArchived: { type: DataTypes.BOOLEAN, defaultValue: false }
+  isArchived: { type: DataTypes.BOOLEAN, defaultValue: false },
+  viewConfig: { type: DataTypes.TEXT } // New field for storing view-specific settings
 }, {
   tableName: 'boards'
 });
