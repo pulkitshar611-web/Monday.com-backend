@@ -7,7 +7,7 @@ const createAdmin = async () => {
         console.log('Database connected.');
 
         const email = 'admin@gmail.com';
-        const password = 'password123';
+        const password = '123';
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const [user, created] = await User.findOrCreate({
@@ -26,7 +26,7 @@ const createAdmin = async () => {
             console.log('Admin user already exists. Updating password...');
             user.password = hashedPassword;
             await user.save();
-            console.log('Admin password updated to: password123');
+            console.log('Admin password updated to: 123');
         }
 
     } catch (err) {

@@ -37,20 +37,41 @@ router.get('/me', auth, (req, res) => {
 // @desc    Get all users
 router.get('/', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
-    const { Item, Group, Board } = require('../models');
+    // Allow all authenticated users to see user list (required for person picker/assignments)
+    // if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
+    const { Item, Group, Board, Role } = require('../models');
     const users = await User.findAll({
       attributes: { exclude: ['password'] },
-      include: [{
-        model: Item,
-        include: [{
-          model: Group,
-          include: [{ model: Board }]
-        }]
-      }]
+      include: [
+        { model: Role },
+        {
+          model: Item,
+          as: 'AssignedItems',
+          include: [{
+            model: Group,
+            include: [{ model: Board }]
+          }]
+        }
+      ]
     });
-    res.json(users);
+
+    // Ensure permissions are parsed if stored as string
+    const processedUsers = users.map(u => {
+      const user = u.toJSON();
+      if (typeof user.permissions === 'string') {
+        try {
+          user.permissions = JSON.parse(user.permissions);
+        } catch (e) {
+          user.permissions = {};
+        }
+      }
+      return user;
+    });
+
+    console.log(`[GET USERS] Sending ${processedUsers.length} users. Sample role: ${processedUsers[0]?.role}`);
+    res.json(processedUsers);
   } catch (err) {
+    console.error('GET /api/users error:', err);
     res.status(500).send('Server error');
   }
 });
@@ -134,18 +155,32 @@ router.put('/password', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
-    const { name, email, password, role, avatar, phone, address } = req.body;
+    const { name, email, password, role, avatar, phone, address, permissions } = req.body;
+    const { Role } = require('../models');
 
     let user = await User.findOne({ where: { email } });
     if (user) return res.status(400).json({ msg: 'User already exists' });
 
+    // Find Role ID by name
+    let roleId = null;
+    if (role) {
+      const roleFound = await Role.findOne({ where: { name: role } });
+      if (roleFound) roleId = roleFound.id;
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    user = await User.create({
-      name, email, password: hashedPassword, role, avatar, phone, address
-    });
+    const userListData = {
+      name, email, password: hashedPassword, role, avatar, phone, address, roleId
+    };
+    if (permissions) {
+      userListData.permissions = typeof permissions === 'string' ? JSON.parse(permissions) : permissions;
+    }
+
+    user = await User.create(userListData);
 
     res.json(user);
   } catch (err) {
+    console.error('Create user error:', err);
     res.status(500).send('Server error');
   }
 });
@@ -153,22 +188,36 @@ router.post('/', auth, async (req, res) => {
 // @route   PUT api/users/:id
 router.put('/:id', auth, async (req, res) => {
   try {
-    // Check if admin OR if user is updating themselves (but usually admin updates role/status)
-    // For simplicity, let admins update anyone.
     if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
-    const { name, email, phone, address, role, status, password } = req.body;
+    const { name, email, phone, address, role, status, password, permissions } = req.body;
+    const { Role } = require('../models');
 
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ msg: 'User not found' });
 
+    console.log('[USER UPDATE] ID:', req.params.id, 'Body:', JSON.stringify(req.body, null, 2));
+
     const updates = { name, email, phone, address, role, status };
+
+    // Handle permissions explicitly
+    if (permissions) {
+      updates.permissions = typeof permissions === 'string' ? JSON.parse(permissions) : permissions;
+    }
+
     if (password) {
       updates.password = await bcrypt.hash(password, 10);
+    }
+
+    // Sync roleId if role is provided
+    if (role) {
+      const roleFound = await Role.findOne({ where: { name: role } });
+      if (roleFound) updates.roleId = roleFound.id;
     }
 
     await user.update(updates);
     res.json(user);
   } catch (err) {
+    console.error('Update user error:', err);
     res.status(500).send('Server error');
   }
 });

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const { Item, Notification, Group, Board, User } = require('../models');
+const checkBoardAccess = require('../middleware/checkBoardAccess');
 
 // @route   GET api/items/my
 // @desc    Get items assigned to the current user
@@ -25,7 +26,7 @@ router.get('/my', auth, async (req, res) => {
 });
 
 // @route   POST api/items
-router.post('/', auth, async (req, res) => {
+router.post('/', [auth, checkBoardAccess], async (req, res) => {
   try {
     // Filter updates: fields in the model go to the root, others to customFields
     const modelFields = Object.keys(Item.rawAttributes);
@@ -51,7 +52,9 @@ router.post('/', auth, async (req, res) => {
     const item = await Item.create(itemData);
 
     // If assigned to someone, create notification
-    if (item.assignedToId && item.assignedToId !== req.user.id) {
+    // SKIP if it's a Team ID (from frontend localstorage, usually 13+ digits)
+    const isTeamId = item.assignedToId && String(item.assignedToId).length > 10;
+    if (item.assignedToId && item.assignedToId !== req.user.id && !isTeamId) {
       await Notification.create({
         UserId: item.assignedToId,
         content: `You have been assigned a new task: ${item.name}`,
@@ -68,8 +71,9 @@ router.post('/', auth, async (req, res) => {
 });
 
 // @route   PATCH api/items/:id
-router.patch('/:id', auth, async (req, res) => {
+router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
   try {
+    console.log(`[PATCH ITEM] ID: ${req.params.id} Body:`, JSON.stringify(req.body));
     const item = await Item.findByPk(req.params.id);
     if (!item) return res.status(404).json({ msg: 'Item not found' });
 
@@ -112,9 +116,12 @@ router.patch('/:id', auth, async (req, res) => {
     await item.update(updates);
 
     // If assignment changed, notify new user
-    if (req.body.assignedToId && req.body.assignedToId !== oldAssigneeId) {
+    // SKIP if it's a Team ID (from frontend localstorage, usually 13+ digits)
+    const newAssignedId = req.body.assignedToId;
+    const isTeamId = newAssignedId && String(newAssignedId).length > 10;
+    if (newAssignedId && newAssignedId !== oldAssigneeId && !isTeamId) {
       await Notification.create({
-        UserId: req.body.assignedToId,
+        UserId: newAssignedId,
         content: `You have been assigned a task: ${item.name}`,
         type: 'task_assigned',
         link: `/board`
@@ -141,13 +148,13 @@ router.patch('/:id', auth, async (req, res) => {
 
     res.json(item);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    console.error('[PATCH ITEM ERROR]:', err);
+    res.status(500).send('Server error: ' + err.message);
   }
 });
 
 // @route   DELETE api/items/:id
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, checkBoardAccess], async (req, res) => {
   try {
     const item = await Item.findByPk(req.params.id);
     if (!item) return res.status(404).json({ msg: 'Item not found' });

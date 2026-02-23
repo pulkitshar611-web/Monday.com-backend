@@ -25,11 +25,12 @@ const User = sequelize.define('User', {
   name: { type: DataTypes.STRING, allowNull: false },
   email: { type: DataTypes.STRING, allowNull: false, unique: true },
   password: { type: DataTypes.STRING, allowNull: false },
-  role: { type: DataTypes.ENUM('Admin', 'Manager', 'User'), defaultValue: 'User' },
+  role: { type: DataTypes.STRING, defaultValue: 'User' },
   avatar: { type: DataTypes.STRING },
   phone: { type: DataTypes.STRING },
   address: { type: DataTypes.STRING },
-  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
+  permissions: { type: DataTypes.JSON }
 }, {
   tableName: 'users'
 });
@@ -96,6 +97,7 @@ const Item = sequelize.define('Item', {
   parentItemId: { type: DataTypes.INTEGER, allowNull: true }, // For subitems
   subItemsData: { type: DataTypes.TEXT }, // JSON string of subitems array (renamed to avoid collision with association)
   connectTasks: { type: DataTypes.TEXT }, // JSON string of connected tasks
+  assignedToId: { type: DataTypes.STRING }, // Support for both User IDs (int) and Team IDs (string)
   phone: { type: DataTypes.STRING },
   location: { type: DataTypes.STRING },
   link: { type: DataTypes.TEXT } // Store as {url, text} JSON string
@@ -141,6 +143,22 @@ const Automation = sequelize.define('Automation', {
   tableName: 'automations'
 });
 
+const Role = sequelize.define('Role', {
+  name: { type: DataTypes.STRING, allowNull: false, unique: true },
+  permissions: { type: DataTypes.JSON, allowNull: false },
+  isCustom: { type: DataTypes.BOOLEAN, defaultValue: true }
+}, {
+  tableName: 'roles'
+});
+
+const Permission = sequelize.define('Permission', {
+  key: { type: DataTypes.STRING, allowNull: false, unique: true },
+  label: { type: DataTypes.STRING, allowNull: false },
+  category: { type: DataTypes.STRING, allowNull: false }
+}, {
+  tableName: 'permissions'
+});
+
 // Associations
 User.hasMany(Notification, { foreignKey: 'UserId' });
 Notification.belongsTo(User, { foreignKey: 'UserId' });
@@ -154,8 +172,9 @@ Item.belongsTo(Group, { foreignKey: 'GroupId' });
 Item.hasMany(Item, { as: 'subItems', foreignKey: 'parentItemId', onDelete: 'CASCADE' });
 Item.belongsTo(Item, { as: 'parentItem', foreignKey: 'parentItemId' });
 
-User.hasMany(Item, { foreignKey: 'assignedToId' });
-Item.belongsTo(User, { as: 'assignedUser', foreignKey: 'assignedToId' });
+// Support both User assignments and pseudo-Team assignments by disabling strict foreign key constraints
+User.hasMany(Item, { as: 'AssignedItems', foreignKey: 'assignedToId', constraints: false });
+Item.belongsTo(User, { as: 'assignedUser', foreignKey: 'assignedToId', constraints: false });
 
 Item.hasMany(File, { as: 'files', foreignKey: 'ItemId', onDelete: 'CASCADE' });
 File.belongsTo(Item, { foreignKey: 'ItemId' });
@@ -168,6 +187,9 @@ Form.belongsTo(Board, { foreignKey: 'BoardId' });
 User.hasMany(Automation, { foreignKey: 'UserId' });
 Automation.belongsTo(User, { foreignKey: 'UserId' });
 
+Role.hasMany(User, { foreignKey: 'roleId' });
+User.belongsTo(Role, { foreignKey: 'roleId' });
+
 module.exports = {
   sequelize,
   User,
@@ -178,5 +200,7 @@ module.exports = {
   Notification,
   File,
   Form,
-  Automation
+  Automation,
+  Role,
+  Permission
 };

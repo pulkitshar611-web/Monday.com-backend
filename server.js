@@ -29,6 +29,8 @@ app.use('/api/search', require('./routes/search'));
 app.use('/api/files', require('./routes/files'));
 app.use('/api/forms', require('./routes/forms'));
 app.use('/api/automations', require('./routes/automations'));
+app.use('/api/roles', require('./routes/roles'));
+app.use('/api/permissions', require('./routes/permissions'));
 
 const PORT = process.env.PORT || 5000;
 
@@ -158,6 +160,33 @@ sequelize.authenticate()
         await queryInterface.addColumn('items', 'link', { type: DataTypes.TEXT, allowNull: true });
       }
 
+      // Ensure assignedToId is STRING (it might be INT from earlier versions/defaults)
+      if (tableInfo.assignedToId) {
+        // Proactively remove any foreign key constraints if we are changing type, 
+        // as MySQL blocks type changes on columns that are part of a foreign key.
+        try {
+          const [constraints] = await sequelize.query(`
+            SELECT CONSTRAINT_NAME 
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'items' 
+            AND COLUMN_NAME = 'assignedToId' 
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+          `);
+          if (constraints && constraints.length > 0) {
+            for (const c of constraints) {
+              console.log(`Dropping existing FK constraint: ${c.CONSTRAINT_NAME}`);
+              await sequelize.query(`ALTER TABLE items DROP FOREIGN KEY ${c.CONSTRAINT_NAME}`).catch(() => { });
+            }
+          }
+        } catch (err) { console.log('Note: Error checking/dropping constraints (safe to ignore if none exist)'); }
+
+        if (tableInfo.assignedToId.type.toLowerCase().includes('int')) {
+          console.log('Migrating assignedToId from INT to STRING to support Team IDs');
+          await queryInterface.changeColumn('items', 'assignedToId', { type: DataTypes.STRING, allowNull: true });
+        }
+      }
+
       console.log('✅ All column migrations completed successfully.');
     } catch (error) {
       console.warn('⚠️  Table migration skipped (items table may not exist yet):', error.message);
@@ -185,10 +214,82 @@ sequelize.authenticate()
       console.warn('⚠️  Boards table migration skipped (boards table may not exist yet):', error.message);
     }
 
+    // Users Migrations
+    try {
+      const queryInterface3 = sequelize.getQueryInterface();
+      const userTableInfo = await queryInterface3.describeTable('users');
+      if (!userTableInfo.roleId) {
+        console.log('Adding missing column: roleId to users');
+        await queryInterface3.addColumn('users', 'roleId', { type: DataTypes.INTEGER, allowNull: true });
+      }
+      if (!userTableInfo.permissions) {
+        console.log('Adding missing column: permissions to users');
+        await queryInterface3.addColumn('users', 'permissions', { type: DataTypes.JSON, allowNull: true });
+      }
+
+      // Convert role from ENUM to STRING to allow custom roles (Viewer, Guest, etc.)
+      if (userTableInfo.role && userTableInfo.role.type.toLowerCase().includes('enum')) {
+        console.log('Migrating users.role from ENUM to STRING');
+        await queryInterface3.changeColumn('users', 'role', { type: DataTypes.STRING, defaultValue: 'User' });
+      }
+
+      console.log('✅ Users table migrations completed successfully.');
+    } catch (error) {
+      console.warn('⚠️  Users table migration skipped:', error.message);
+    }
+
     return sequelize.sync();
   })
-  .then(() => {
+  .then(async () => {
     console.log('Database synced');
+
+    // Seed Permissions
+    const { Permission, Role } = require('./models');
+    const existingPermCount = await Permission.count();
+    if (existingPermCount === 0) {
+      console.log('Seeding default permissions...');
+      const defaultPerms = [
+        { category: 'Account Settings', key: 'inviteUsers', label: 'Invite new team members' },
+        { category: 'Account Settings', key: 'uploadFiles', label: 'Upload files to boards' },
+        { category: 'Account Settings', key: 'deleteFiles', label: 'Permanently delete files' },
+        { category: 'Account Settings', key: 'createWorkspaces', label: 'Create new workspaces' },
+        { category: 'Board Management', key: 'createMainBoards', label: 'Create new boards' },
+        { category: 'Board Management', key: 'deleteSelfOwnedBoards', label: 'Archive or delete self-owned boards' },
+        { category: 'Board Management', key: 'createBoardViews', label: 'Create board views (Dashboard, Table, etc.)' },
+        { category: 'Board Management', key: 'exportExcel', label: 'Export board data to Excel' },
+        { category: 'Board Management', key: 'moveGroups', label: 'Move groups between boards' },
+        { category: 'Item Management', key: 'deleteSelfItems', label: 'Delete self-created items' },
+        { category: 'Item Management', key: 'deleteOtherItems', label: 'Delete items created by other users' },
+        { category: 'Item Management', key: 'moveItems', label: 'Move items to different boards' },
+        { category: 'User & Team Management', key: 'manageMembers', label: 'Manage team members' },
+        { category: 'User & Team Management', key: 'viewTeams', label: 'View user profile pages' },
+        { category: 'User & Team Management', key: 'editRoles', label: 'Modify user roles and permissions' }
+      ];
+      await Permission.bulkCreate(defaultPerms);
+      console.log('✅ Permissions seeded.');
+    }
+
+    // Seed Roles
+    const existingRoleCount = await Role.count();
+    if (existingRoleCount === 0) {
+      console.log('Seeding default roles...');
+      const permsDefinitions = await Permission.findAll();
+      const defaultPermsMap = {};
+      permsDefinitions.forEach(p => defaultPermsMap[p.key] = false);
+
+      const adminPerms = {};
+      permsDefinitions.forEach(p => adminPerms[p.key] = true);
+
+      const defaultRoles = [
+        { name: 'Admin', permissions: adminPerms, isCustom: false },
+        { name: 'Member', permissions: defaultPermsMap, isCustom: false },
+        { name: 'Viewer', permissions: defaultPermsMap, isCustom: false },
+        { name: 'Guest', permissions: defaultPermsMap, isCustom: false }
+      ];
+      await Role.bulkCreate(defaultRoles);
+      console.log('✅ Roles seeded.');
+    }
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

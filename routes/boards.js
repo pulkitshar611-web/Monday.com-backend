@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const { Board, Group, Item, User } = require('../models');
+const checkBoardAccess = require('../middleware/checkBoardAccess');
 
 // DEBUG LOG: Ensure this file is loaded
 console.log('--- BOARDS ROUTER INITIALIZING ---');
@@ -44,15 +45,33 @@ router.delete('/:id', auth, async (req, res) => {
 // @route   GET api/boards/archived
 router.get('/archived', auth, async (req, res) => {
   try {
+    const isAdmin = req.user.role === 'Admin';
+    const isManager = req.user.role === 'Manager';
+
     const boards = await Board.findAll({
       where: { isArchived: true },
       include: [{
         model: Group,
         as: 'Groups',
-        required: false
+        required: false,
+        include: [{
+          model: Item,
+          as: 'items',
+          required: false,
+          where: isAdmin || isManager ? {} : { assignedToId: req.user.id }
+        }]
       }]
     });
-    res.json(boards);
+
+    const filtered = boards.filter(b => {
+      if (isAdmin || isManager) return true;
+      // For archived boards, we check if they HAVE any items assigned to the user
+      // Since it's archived, we only show it if they WERE involved.
+      const hasAssignments = (b.Groups || []).some(g => (g.items || []).length > 0);
+      return hasAssignments;
+    });
+
+    res.json(filtered);
   } catch (err) {
     console.error('boards.js GET /archived error:', err);
     res.status(500).json({ msg: 'Server error' });
@@ -77,28 +96,62 @@ router.get('/health', async (req, res) => {
 // @route   GET api/boards
 router.get('/', auth, async (req, res) => {
   try {
-    const showAll = req.user.role === 'Admin';
-    const boards = await Board.findAll({
+    const isAdmin = req.user.role === 'Admin';
+    const isManager = req.user.role === 'Manager';
+
+    const commonInclude = [{
+      model: Group,
+      as: 'Groups',
+      required: false,
       include: [{
-        model: Group,
-        as: 'Groups',
+        model: Item,
+        as: 'items',
         required: false,
-        include: [{
-          model: Item,
-          as: 'items',
-          where: showAll ? {} : { assignedToId: req.user.id },
-          required: false,
-          include: [
-            { model: Item, as: 'subItems' },
-            { model: User, as: 'assignedUser', attributes: ['name', 'email', 'avatar'] }
-          ]
-        }]
+        include: [
+          { model: Item, as: 'subItems' },
+          { model: User, as: 'assignedUser', attributes: ['name', 'email', 'avatar'] }
+        ]
       }]
+    }];
+
+    // 1. Get all boards
+    const allBoards = await Board.findAll({
+      include: commonInclude
     });
 
-    const filteredBoards = showAll ? boards : boards.filter(board => {
-      return board.Groups && board.Groups.some(group => group.items && group.items.length > 0);
+    // 2. Identify boards where user is assigned
+    const assignedItems = await Item.findAll({
+      where: { assignedToId: req.user.id },
+      include: [{
+        model: Group,
+        attributes: ['BoardId']
+      }]
     });
+    const assignedBoardIds = [...new Set(assignedItems.map(item => item.Group?.BoardId).filter(id => id))];
+
+    // 3. Mark access levels AND filter for non-admins
+    const filteredBoards = allBoards
+      .map(b => {
+        const board = b.toJSON();
+        const isAssigned = assignedBoardIds.includes(b.id);
+
+        if (isAdmin || isManager) {
+          board.access = 'full';
+          return board;
+        } else if (isAssigned) {
+          board.access = 'full';
+          return board;
+        } else {
+          // For non-assigned boards, regular users get 'view' access if we decide to show them
+          // BUT the requirement is "only see relevant boards", so we filter them out.
+          board.access = 'view';
+          return board;
+        }
+      })
+      .filter(b => {
+        if (isAdmin || isManager) return true;
+        return b.access === 'full'; // Only return assigned boards for regular users
+      });
 
     res.json(filteredBoards);
   } catch (err) {
@@ -110,7 +163,7 @@ router.get('/', auth, async (req, res) => {
 // @route   POST api/boards
 router.post('/', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
+    if (req.user.role !== 'Admin' && req.user.role !== 'Manager') return res.status(403).json({ msg: 'Access denied' });
     const board = await Board.create(req.body);
     await Group.create({ title: 'New Group', BoardId: board.id });
     res.json(board);
@@ -120,7 +173,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // @route   POST api/boards/:id/groups
-router.post('/:id/groups', auth, async (req, res) => {
+router.post('/:id/groups', [auth, checkBoardAccess], async (req, res) => {
   try {
     const group = await Group.create({ ...req.body, BoardId: req.params.id });
     res.json(group);
@@ -130,7 +183,7 @@ router.post('/:id/groups', auth, async (req, res) => {
 });
 
 // @route   PATCH api/boards/:id
-router.patch('/:id', auth, async (req, res) => {
+router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
   try {
     const board = await Board.findByPk(req.params.id);
     if (!board) return res.status(404).json({ msg: 'Board not found' });
