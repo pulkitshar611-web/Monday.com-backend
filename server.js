@@ -219,7 +219,8 @@ sequelize.authenticate()
         { category: 'User & Team Management', key: 'viewTeams', label: 'View user profile pages' },
         { category: 'User & Team Management', key: 'editRoles', label: 'Modify user roles and permissions' }
       ];
-      await Permission.bulkCreate(defaultPerms);
+      // Use ignoreDuplicates to avoid ER_DUP_ENTRY if some perms were already created
+      await Permission.bulkCreate(defaultPerms, { ignoreDuplicates: true });
       console.log('✅ Permissions seeded.');
     }
 
@@ -240,7 +241,8 @@ sequelize.authenticate()
         { name: 'Viewer', permissions: defaultPermsMap, isCustom: false },
         { name: 'Guest', permissions: defaultPermsMap, isCustom: false }
       ];
-      await Role.bulkCreate(defaultRoles);
+      // Use ignoreDuplicates for safety
+      await Role.bulkCreate(defaultRoles, { ignoreDuplicates: true });
       console.log('✅ Roles seeded.');
     }
 
