@@ -18,7 +18,11 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    let user = await User.findOne({ where: { email } });
+    const { Role } = require('../models');
+    let user = await User.findOne({
+      where: { email },
+      include: [{ model: Role }]
+    });
     console.log('[LOGIN] User lookup result:', user ? `Found user: ${user.email}` : 'User not found');
 
     if (!user) {
@@ -31,6 +35,23 @@ router.post('/login', async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ msg: 'Invalid Credentials' });
     }
+
+    // Merge permissions: Role permissions + User-specific overrides
+    let basePermissions = {};
+    if (user.Role && user.Role.permissions) {
+      basePermissions = typeof user.Role.permissions === 'string'
+        ? JSON.parse(user.Role.permissions)
+        : user.Role.permissions;
+    }
+
+    let userPermissions = {};
+    if (user.permissions) {
+      userPermissions = typeof user.permissions === 'string'
+        ? JSON.parse(user.permissions)
+        : user.permissions;
+    }
+
+    const mergedPermissions = { ...basePermissions, ...userPermissions };
 
     const payload = {
       user: {
@@ -52,7 +73,9 @@ router.post('/login', async (req, res) => {
           name: user.name,
           email: user.email,
           role: user.role,
-          avatar: user.avatar
+          roleId: user.roleId,
+          avatar: user.avatar,
+          permissions: mergedPermissions
         }
       });
     });

@@ -7,11 +7,12 @@ const { Board, Group, Item } = require('../models');
  */
 module.exports = async (req, res, next) => {
     try {
-        const { id, role } = req.user;
+        const { id, role, permissions } = req.user;
         const isAdmin = role === 'Admin';
         const isManager = role === 'Manager';
+        const canViewAll = permissions?.viewAllData === true;
 
-        if (isAdmin || isManager) {
+        if (isAdmin || isManager || canViewAll) {
             return next();
         }
 

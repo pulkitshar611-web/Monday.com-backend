@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Role } = require('../models');
 const auth = require('../middleware/auth');
+const checkPermission = require('../middleware/checkPermission');
 
 // @route   GET api/roles
 // @desc    Get all roles
@@ -25,10 +26,10 @@ router.get('/', auth, async (req, res) => {
 
 // @route   POST api/roles
 // @desc    Create a new role
-router.post('/', auth, async (req, res) => {
+router.post('/', [auth, checkPermission('editRoles')], async (req, res) => {
     const { name, permissions, isCustom } = req.body;
     try {
-        if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
+        // if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
 
         let role = await Role.findOne({ where: { name } });
         if (role) {
@@ -50,10 +51,10 @@ router.post('/', auth, async (req, res) => {
 
 // @route   PUT api/roles/:id
 // @desc    Update a role (name or permissions)
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', [auth, checkPermission('editRoles')], async (req, res) => {
     const { name, permissions } = req.body;
     try {
-        if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
+        // if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
 
         let role = await Role.findByPk(req.params.id);
         if (!role) return res.status(404).json({ msg: 'Role not found' });
@@ -81,9 +82,9 @@ router.put('/:id', auth, async (req, res) => {
 
 // @route   DELETE api/roles/:id
 // @desc    Delete a role
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, checkPermission('editRoles')], async (req, res) => {
     try {
-        if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
+        // if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
 
         let role = await Role.findByPk(req.params.id);
         if (!role) return res.status(404).json({ msg: 'Role not found' });

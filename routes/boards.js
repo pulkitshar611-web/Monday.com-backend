@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const checkPermission = require('../middleware/checkPermission');
 const { Board, Group, Item, User } = require('../models');
 const checkBoardAccess = require('../middleware/checkBoardAccess');
 
@@ -109,7 +110,7 @@ router.get('/', auth, async (req, res) => {
         required: false,
         include: [
           { model: Item, as: 'subItems' },
-          { model: User, as: 'assignedUser', attributes: ['name', 'email', 'avatar'] }
+          { model: User, as: 'assignedUser', attributes: ['id', 'name', 'email', 'avatar'] }
         ]
       }]
     }];
@@ -121,13 +122,21 @@ router.get('/', auth, async (req, res) => {
 
     // 2. Identify boards where user is assigned
     const assignedItems = await Item.findAll({
-      where: { assignedToId: req.user.id },
+      where: { assignedToId: String(req.user.id) },
       include: [{
         model: Group,
+        as: 'Group', // Default association name for Item.belongsTo(Group)
         attributes: ['BoardId']
       }]
     });
-    const assignedBoardIds = [...new Set(assignedItems.map(item => item.Group?.BoardId).filter(id => id))];
+
+    // FALLBACK: If 'Group' (capital) doesn't work, try 'group' (lowercase) or check raw column
+    const assignedBoardIds = [...new Set(assignedItems.map(item => {
+      const group = item.Group || item.group;
+      return group?.BoardId;
+    }).filter(id => id))];
+
+    console.log(`[BOARDS DEBUG] User: ${req.user.id}, Role: ${req.user.role}, AssignedItems: ${assignedItems.length}, AssignedBoardIds: ${JSON.stringify(assignedBoardIds)}`);
 
     // 3. Mark access levels AND filter for non-admins
     const filteredBoards = allBoards
@@ -161,9 +170,9 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   POST api/boards
-router.post('/', auth, async (req, res) => {
+router.post('/', [auth, checkPermission('createMainBoards')], async (req, res) => {
   try {
-    if (req.user.role !== 'Admin' && req.user.role !== 'Manager') return res.status(403).json({ msg: 'Access denied' });
+    // if (req.user.role !== 'Admin' && req.user.role !== 'Manager') return res.status(403).json({ msg: 'Access denied' });
     const board = await Board.create(req.body);
     await Group.create({ title: 'New Group', BoardId: board.id });
     res.json(board);

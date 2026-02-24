@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const auth = require('../middleware/auth');
+const checkPermission = require('../middleware/checkPermission');
 const { User } = require('../models');
 const multer = require('multer');
 const path = require('path');
@@ -151,10 +152,10 @@ router.put('/password', auth, async (req, res) => {
 });
 
 // @route   POST api/users
-// @desc    Create a user (Admin only)
-router.post('/', auth, async (req, res) => {
+// @desc    Create a user (Admin or with manageMembers permission)
+router.post('/', [auth, checkPermission('manageMembers')], async (req, res) => {
   try {
-    if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
+    // if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
     const { name, email, password, role, avatar, phone, address, permissions } = req.body;
     const { Role } = require('../models');
 
@@ -186,9 +187,9 @@ router.post('/', auth, async (req, res) => {
 });
 
 // @route   PUT api/users/:id
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', [auth, checkPermission('manageMembers')], async (req, res) => {
   try {
-    if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
+    // if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
     const { name, email, phone, address, role, status, password, permissions } = req.body;
     const { Role } = require('../models');
 
@@ -223,9 +224,9 @@ router.put('/:id', auth, async (req, res) => {
 });
 
 // @route   DELETE api/users/:id
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, checkPermission('manageMembers')], async (req, res) => {
   try {
-    if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
+    // if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
     await User.destroy({ where: { id: req.params.id } });
     res.json({ msg: 'User removed' });
   } catch (err) {
