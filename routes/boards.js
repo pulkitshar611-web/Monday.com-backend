@@ -18,11 +18,6 @@ router.delete('/:id', auth, async (req, res) => {
   console.log(`[ROUTE HIT] DELETE /api/boards/${boardId} (User: ${req.user.id}, Role: ${req.user.role})`);
 
   try {
-    if (req.user.role !== 'Admin') {
-      console.log(`[DELETE DENIED] User ${req.user.id} is not an Admin`);
-      return res.status(403).json({ msg: 'Access denied: Requires Admin role' });
-    }
-
     const board = await Board.findByPk(boardId);
 
     if (!board) {
@@ -32,6 +27,15 @@ router.delete('/:id', auth, async (req, res) => {
         id: boardId,
         success: true
       });
+    }
+
+    const isAdmin = req.user.role === 'Admin';
+    const isManager = req.user.role === 'Manager';
+    const isCoordinator = String(board.ownerId) === String(req.user.id);
+
+    if (!isAdmin && !isManager && !isCoordinator) {
+      console.log(`[DELETE DENIED] User ${req.user.id} is not Admin, Manager, or Coordinator of board ${boardId}`);
+      return res.status(403).json({ msg: 'Access denied: Only admins, managers, or the board coordinator can delete a board.' });
     }
 
     await board.destroy();
@@ -59,18 +63,12 @@ router.get('/archived', auth, async (req, res) => {
           model: Item,
           as: 'items',
           required: false,
-          where: isAdmin || isManager ? {} : { assignedToId: req.user.id }
+          where: {} // Remove item assignment restriction
         }]
       }]
     });
 
-    const filtered = boards.filter(b => {
-      if (isAdmin || isManager) return true;
-      // For archived boards, we check if they HAVE any items assigned to the user
-      // Since it's archived, we only show it if they WERE involved.
-      const hasAssignments = (b.Groups || []).some(g => (g.items || []).length > 0);
-      return hasAssignments;
-    });
+    const filtered = boards; // Show everything
 
     res.json(filtered);
   } catch (err) {
@@ -120,47 +118,28 @@ router.get('/', auth, async (req, res) => {
       include: commonInclude
     });
 
-    // 2. Identify boards where user is assigned
+    // 2. Identify boards where user is assigned to items
     const assignedItems = await Item.findAll({
       where: { assignedToId: String(req.user.id) },
       include: [{
         model: Group,
-        as: 'Group', // Default association name for Item.belongsTo(Group)
+        as: 'Group',
         attributes: ['BoardId']
       }]
     });
 
-    // FALLBACK: If 'Group' (capital) doesn't work, try 'group' (lowercase) or check raw column
     const assignedBoardIds = [...new Set(assignedItems.map(item => {
       const group = item.Group || item.group;
       return group?.BoardId;
     }).filter(id => id))];
 
-    console.log(`[BOARDS DEBUG] User: ${req.user.id}, Role: ${req.user.role}, AssignedItems: ${assignedItems.length}, AssignedBoardIds: ${JSON.stringify(assignedBoardIds)}`);
-
-    // 3. Mark access levels AND filter for non-admins
-    const filteredBoards = allBoards
-      .map(b => {
-        const board = b.toJSON();
-        const isAssigned = assignedBoardIds.includes(b.id);
-
-        if (isAdmin || isManager) {
-          board.access = 'full';
-          return board;
-        } else if (isAssigned) {
-          board.access = 'full';
-          return board;
-        } else {
-          // For non-assigned boards, regular users get 'view' access if we decide to show them
-          // BUT the requirement is "only see relevant boards", so we filter them out.
-          board.access = 'view';
-          return board;
-        }
-      })
-      .filter(b => {
-        if (isAdmin || isManager) return true;
-        return b.access === 'full'; // Only return assigned boards for regular users
-      });
+    // 3. Filter and mark access
+    const filteredBoards = allBoards.map(b => {
+      const board = b.toJSON();
+      board.access = 'full';
+      board.isCoordinator = true;
+      return board;
+    });
 
     res.json(filteredBoards);
   } catch (err) {
@@ -197,7 +176,7 @@ router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
     const board = await Board.findByPk(req.params.id);
     if (!board) return res.status(404).json({ msg: 'Board not found' });
 
-    const allowedUpdates = ['name', 'type', 'folder', 'columns', 'isFavorite', 'isArchived'];
+    const allowedUpdates = ['name', 'type', 'folder', 'columns', 'isFavorite', 'isArchived', 'ownerId', 'viewConfig'];
     allowedUpdates.forEach(field => {
       if (req.body[field] !== undefined) {
         board[field] = req.body[field];

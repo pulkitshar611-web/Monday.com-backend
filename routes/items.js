@@ -9,7 +9,7 @@ const checkBoardAccess = require('../middleware/checkBoardAccess');
 router.get('/my', auth, async (req, res) => {
   try {
     const items = await Item.findAll({
-      where: { assignedToId: req.user.id },
+      where: {}, // Return all items for full visibility
       include: [
         {
           model: Group,
@@ -158,6 +158,13 @@ router.delete('/:id', [auth, checkBoardAccess], async (req, res) => {
   try {
     const item = await Item.findByPk(req.params.id);
     if (!item) return res.status(404).json({ msg: 'Item not found' });
+
+    // ONLY Admins, Managers, or the Board Coordinator (req.isCoordinator) can delete items
+    // Regular assigned collaborators can only edit, not delete (Client requirement)
+    if (req.user.role !== 'Admin' && req.user.role !== 'Manager' && !req.isCoordinator) {
+      return res.status(403).json({ msg: 'Access denied: Only coordinators and admins can delete data.' });
+    }
+
     await item.destroy();
     res.json({ msg: 'Item removed' });
   } catch (err) {

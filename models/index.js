@@ -43,6 +43,7 @@ const Board = sequelize.define('Board', {
   columns: { type: DataTypes.JSON }, // Store column definitions: [{id: 'status', title: 'Status', type: 'status'}, ...]
   isFavorite: { type: DataTypes.BOOLEAN, defaultValue: false },
   isArchived: { type: DataTypes.BOOLEAN, defaultValue: false },
+  ownerId: { type: DataTypes.STRING }, // New field for Board Owner/Coordinator
   viewConfig: { type: DataTypes.TEXT } // New field for storing view-specific settings
 }, {
   tableName: 'boards'
@@ -160,6 +161,19 @@ const Permission = sequelize.define('Permission', {
   tableName: 'permissions'
 });
 
+const TimeSession = sequelize.define('TimeSession', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  itemId: { type: DataTypes.INTEGER, allowNull: false },
+  userId: { type: DataTypes.INTEGER, allowNull: false },
+  startTime: { type: DataTypes.DATE },
+  endTime: { type: DataTypes.DATE },
+  duration: { type: DataTypes.INTEGER, defaultValue: 0 }, // Accumulated duration in seconds
+  isActive: { type: DataTypes.BOOLEAN, defaultValue: false }
+}, {
+  tableName: 'time_sessions'
+});
+
+
 // Associations
 User.hasMany(Notification, { foreignKey: 'UserId' });
 Notification.belongsTo(User, { foreignKey: 'UserId' });
@@ -191,6 +205,13 @@ Automation.belongsTo(User, { foreignKey: 'UserId' });
 Role.hasMany(User, { foreignKey: 'roleId' });
 User.belongsTo(Role, { foreignKey: 'roleId' });
 
+Item.hasMany(TimeSession, { as: 'timeSessions', foreignKey: 'itemId', onDelete: 'CASCADE' });
+TimeSession.belongsTo(Item, { foreignKey: 'itemId' });
+
+User.hasMany(TimeSession, { as: 'timeSessions', foreignKey: 'userId', onDelete: 'CASCADE' });
+TimeSession.belongsTo(User, { foreignKey: 'userId' });
+
+
 module.exports = {
   sequelize,
   User,
@@ -203,5 +224,7 @@ module.exports = {
   Form,
   Automation,
   Role,
-  Permission
+  Permission,
+  TimeSession
 };
+

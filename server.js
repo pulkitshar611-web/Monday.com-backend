@@ -31,6 +31,10 @@ app.use('/api/forms', require('./routes/forms'));
 app.use('/api/automations', require('./routes/automations'));
 app.use('/api/roles', require('./routes/roles'));
 app.use('/api/permissions', require('./routes/permissions'));
+app.use('/api/folders', require('./routes/folders'));
+app.use('/api/time', require('./routes/timeTracking'));
+
+
 
 const PORT = process.env.PORT || 5000;
 
@@ -133,6 +137,10 @@ sequelize.authenticate()
       if (!boardColumns.includes('viewconfig')) {
         console.log('Adding missing column: viewConfig to boards');
         await queryInterface2.addColumn('boards', 'viewConfig', { type: DataTypes.TEXT, allowNull: true });
+      }
+      if (!boardColumns.includes('ownerid')) {
+        console.log('Adding missing column: ownerId to boards');
+        await queryInterface2.addColumn('boards', 'ownerId', { type: DataTypes.STRING, allowNull: true });
       }
       console.log('✅ Boards table migrations completed successfully.');
     } catch (error) {
