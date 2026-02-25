@@ -63,7 +63,7 @@ router.post('/login', async (req, res) => {
     jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '10h' }, (err, token) => {
       if (err) {
         console.error('[LOGIN] JWT signing error:', err);
-        return res.status(500).json({ msg: 'Error signing token', error: err.message });
+        throw err;
       }
       console.log('[LOGIN] Login successful for:', user.email);
       res.json({
@@ -80,12 +80,8 @@ router.post('/login', async (req, res) => {
       });
     });
   } catch (err) {
-    console.error('[LOGIN] Server error detail:', err);
-    res.status(500).json({
-      msg: 'Server error during login',
-      error: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    });
+    console.error('[LOGIN] Server error:', err.message);
+    res.status(500).send('Server error');
   }
 });
 

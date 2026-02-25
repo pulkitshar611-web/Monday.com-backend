@@ -42,118 +42,168 @@ sequelize.authenticate()
   .then(async () => {
     console.log('Database connection established.');
 
-    // 1. Initial sync to ensure tables exist
-    await sequelize.sync();
-    console.log('Initial sync completed.');
-
     // SAFE MIGRATION: Add columns if they are missing
     try {
       const queryInterface = sequelize.getQueryInterface();
+      const tableInfo = await queryInterface.describeTable('items');
+      const itemColumns = Object.keys(tableInfo).map(k => k.toLowerCase());
 
-      // Items migrations
-      try {
-        const tableInfo = await queryInterface.describeTable('items');
-        const itemColumns = Object.keys(tableInfo).map(k => k.toLowerCase());
-
-        const addCol = async (col, type, def = undefined) => {
-          if (!itemColumns.includes(col.toLowerCase())) {
-            console.log(`Adding missing column to items: ${col}`);
-            const options = { type, allowNull: true };
-            if (def !== undefined) options.defaultValue = def;
-            await queryInterface.addColumn('items', col, options);
-          }
-        };
-
-        await addCol('expectedSubmissionDate', DataTypes.STRING);
-        await addCol('revisionDates', DataTypes.STRING);
-        await addCol('comments', DataTypes.TEXT);
-        await addCol('plannedTime', DataTypes.STRING, '00:00:00');
-        await addCol('isUnread', DataTypes.BOOLEAN, false);
-        await addCol('source', DataTypes.STRING);
-        await addCol('urgency', DataTypes.STRING);
-        await addCol('dealValue', DataTypes.DECIMAL(10, 2));
-        await addCol('risk', DataTypes.STRING);
-        await addCol('priority', DataTypes.STRING);
-        await addCol('connectTasks', DataTypes.TEXT);
-        await addCol('dateSubmitted', DataTypes.STRING);
-        await addCol('comments2', DataTypes.TEXT);
-        await addCol('people', DataTypes.STRING);
-        await addCol('itemIdSerial', DataTypes.STRING);
-        await addCol('subitems', DataTypes.STRING);
-        await addCol('dealStatus', DataTypes.STRING);
-        await addCol('invoiceSent', DataTypes.BOOLEAN, false);
-        await addCol('aiModel', DataTypes.STRING);
-        await addCol('customFields', DataTypes.JSON);
-        await addCol('updates', DataTypes.TEXT);
-        await addCol('filesData', DataTypes.TEXT);
-        await addCol('activity', DataTypes.TEXT);
-        await addCol('subItemsData', DataTypes.TEXT);
-        await addCol('parentItemId', DataTypes.INTEGER);
-        await addCol('payment', DataTypes.DECIMAL(10, 2), 0.00);
-        await addCol('phone', DataTypes.STRING);
-        await addCol('location', DataTypes.STRING);
-        await addCol('link', DataTypes.TEXT);
-
-        // Ensure assignedToId is STRING
-        if (itemColumns.includes('assignedtoid')) {
-          const actualKey = Object.keys(tableInfo).find(k => k.toLowerCase() === 'assignedtoid');
-          if (tableInfo[actualKey].type.toLowerCase().includes('int')) {
-            console.log('Migrating assignedToId from INT to STRING');
-            await queryInterface.changeColumn('items', 'assignedToId', { type: DataTypes.STRING, allowNull: true });
-          }
+      const addCol = async (col, type, def = undefined) => {
+        if (!itemColumns.includes(col.toLowerCase())) {
+          console.log(`Adding missing column: ${col}`);
+          const options = { type, allowNull: true };
+          if (def !== undefined) options.defaultValue = def;
+          await queryInterface.addColumn('items', col, options);
         }
-      } catch (e) {
-        console.warn('Items migration error:', e.message);
-      }
+      };
 
-      // Boards Migrations
-      try {
-        const boardTableInfo = await queryInterface.describeTable('boards');
-        const boardColumns = Object.keys(boardTableInfo).map(k => k.toLowerCase());
-        if (!boardColumns.includes('isfavorite')) await queryInterface.addColumn('boards', 'isFavorite', { type: DataTypes.BOOLEAN, defaultValue: false });
-        if (!boardColumns.includes('isarchived')) await queryInterface.addColumn('boards', 'isArchived', { type: DataTypes.BOOLEAN, defaultValue: false });
-        if (!boardColumns.includes('viewconfig')) await queryInterface.addColumn('boards', 'viewConfig', { type: DataTypes.TEXT, allowNull: true });
-        if (!boardColumns.includes('ownerid')) await queryInterface.addColumn('boards', 'ownerId', { type: DataTypes.STRING, allowNull: true });
-      } catch (e) {
-        console.warn('Boards migration error:', e.message);
-      }
+      await addCol('expectedSubmissionDate', DataTypes.STRING);
+      await addCol('revisionDates', DataTypes.STRING);
+      await addCol('comments', DataTypes.TEXT);
+      await addCol('plannedTime', DataTypes.STRING, '00:00:00');
+      await addCol('isUnread', DataTypes.BOOLEAN, false);
+      await addCol('source', DataTypes.STRING);
+      await addCol('urgency', DataTypes.STRING);
+      await addCol('dealValue', DataTypes.DECIMAL(10, 2));
+      await addCol('risk', DataTypes.STRING);
+      await addCol('priority', DataTypes.STRING);
+      await addCol('connectTasks', DataTypes.TEXT);
+      await addCol('dateSubmitted', DataTypes.STRING);
+      await addCol('comments2', DataTypes.TEXT);
+      await addCol('people', DataTypes.STRING);
+      await addCol('itemIdSerial', DataTypes.STRING);
+      await addCol('subitems', DataTypes.STRING);
+      await addCol('dealStatus', DataTypes.STRING);
+      await addCol('invoiceSent', DataTypes.BOOLEAN, false);
+      await addCol('aiModel', DataTypes.STRING);
+      await addCol('customFields', DataTypes.JSON);
+      await addCol('updates', DataTypes.TEXT);
+      await addCol('filesData', DataTypes.TEXT);
+      await addCol('activity', DataTypes.TEXT);
+      await addCol('subItemsData', DataTypes.TEXT);
+      await addCol('parentItemId', DataTypes.INTEGER);
+      await addCol('payment', DataTypes.DECIMAL(10, 2), 0.00);
+      await addCol('phone', DataTypes.STRING);
+      await addCol('location', DataTypes.STRING);
+      await addCol('link', DataTypes.TEXT);
 
-      // Users Migrations
-      try {
-        const userTableInfo = await queryInterface.describeTable('users');
-        const userColumns = Object.keys(userTableInfo).map(k => k.toLowerCase());
-        if (!userColumns.includes('roleid')) await queryInterface.addColumn('users', 'roleId', { type: DataTypes.INTEGER, allowNull: true });
-        if (!userColumns.includes('permissions')) await queryInterface.addColumn('users', 'permissions', { type: DataTypes.JSON, allowNull: true });
-        if (!userColumns.includes('phone')) await queryInterface.addColumn('users', 'phone', { type: DataTypes.STRING, allowNull: true });
-        if (!userColumns.includes('address')) await queryInterface.addColumn('users', 'address', { type: DataTypes.STRING, allowNull: true });
-        if (!userColumns.includes('status')) await queryInterface.addColumn('users', 'status', { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' });
+      // Ensure assignedToId is STRING (it might be INT from earlier versions/defaults)
+      if (itemColumns.includes('assignedtoid')) {
+        // Proactively remove any foreign key constraints if we are changing type
+        try {
+          const [constraints] = await sequelize.query(`
+            SELECT CONSTRAINT_NAME 
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'items' 
+            AND COLUMN_NAME = 'assignedToId' 
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+          `);
+          if (constraints && constraints.length > 0) {
+            for (const c of constraints) {
+              console.log(`Dropping existing FK constraint: ${c.CONSTRAINT_NAME}`);
+              await sequelize.query(`ALTER TABLE items DROP FOREIGN KEY ${c.CONSTRAINT_NAME}`).catch(() => { });
+            }
+          }
+        } catch (err) { }
 
-        if (userTableInfo.role && userTableInfo.role.type.toLowerCase().includes('enum')) {
-          console.log('Migrating role from ENUM to STRING');
-          await queryInterface.changeColumn('users', 'role', { type: DataTypes.STRING, defaultValue: 'User' });
+        // Find the actual case sensitive key
+        const actualKey = Object.keys(tableInfo).find(k => k.toLowerCase() === 'assignedtoid');
+        if (tableInfo[actualKey].type.toLowerCase().includes('int')) {
+          console.log('Migrating assignedToId from INT to STRING to support Team IDs');
+          await queryInterface.changeColumn('items', 'assignedToId', { type: DataTypes.STRING, allowNull: true });
         }
-      } catch (e) {
-        console.warn('Users migration error:', e.message);
       }
 
-      // Roles Migrations
-      try {
-        const roleTableInfo = await queryInterface.describeTable('roles');
-        const roleColumns = Object.keys(roleTableInfo).map(k => k.toLowerCase());
-        if (!roleColumns.includes('permissions')) await queryInterface.addColumn('roles', 'permissions', { type: DataTypes.JSON, allowNull: true });
-      } catch (e) {
-        console.warn('Roles migration error:', e.message);
-      }
-
+      console.log('✅ All column migrations completed successfully.');
     } catch (error) {
-      console.error('Migration system error:', error.message);
+      console.warn('⚠️  Table migration skipped (items table may not exist yet):', error.message);
     }
 
-    // Final sync with alter: true to ensure everything is perfect
-    return sequelize.sync({ alter: true });
+    // Boards Migrations
+    try {
+      const queryInterface2 = sequelize.getQueryInterface();
+      const boardTableInfo = await queryInterface2.describeTable('boards');
+      const boardColumns = Object.keys(boardTableInfo).map(k => k.toLowerCase());
+
+      if (!boardColumns.includes('isfavorite')) {
+        console.log('Adding missing column: isFavorite to boards');
+        await queryInterface2.addColumn('boards', 'isFavorite', { type: DataTypes.BOOLEAN, defaultValue: false });
+      }
+      if (!boardColumns.includes('isarchived')) {
+        console.log('Adding missing column: isArchived to boards');
+        await queryInterface2.addColumn('boards', 'isArchived', { type: DataTypes.BOOLEAN, defaultValue: false });
+      }
+      if (!boardColumns.includes('viewconfig')) {
+        console.log('Adding missing column: viewConfig to boards');
+        await queryInterface2.addColumn('boards', 'viewConfig', { type: DataTypes.TEXT, allowNull: true });
+      }
+      if (!boardColumns.includes('ownerid')) {
+        console.log('Adding missing column: ownerId to boards');
+        await queryInterface2.addColumn('boards', 'ownerId', { type: DataTypes.STRING, allowNull: true });
+      }
+      console.log('✅ Boards table migrations completed successfully.');
+    } catch (error) {
+      console.warn('⚠️  Boards table migration skipped:', error.message);
+    }
+
+    // Users Migrations
+    try {
+      const queryInterface3 = sequelize.getQueryInterface();
+      const userTableInfo = await queryInterface3.describeTable('users');
+      const userColumns = Object.keys(userTableInfo).map(k => k.toLowerCase());
+
+      if (!userColumns.includes('roleid')) {
+        console.log('Adding missing column: roleId to users');
+        await queryInterface3.addColumn('users', 'roleId', { type: DataTypes.INTEGER, allowNull: true });
+      }
+      if (!userColumns.includes('permissions')) {
+        console.log('Adding missing column: permissions to users');
+        await queryInterface3.addColumn('users', 'permissions', { type: DataTypes.JSON, allowNull: true });
+      }
+      if (!userColumns.includes('phone')) {
+        console.log('Adding missing column: phone to users');
+        await queryInterface3.addColumn('users', 'phone', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!userColumns.includes('address')) {
+        console.log('Adding missing column: address to users');
+        await queryInterface3.addColumn('users', 'address', { type: DataTypes.STRING, allowNull: true });
+      }
+      if (!userColumns.includes('status')) {
+        console.log('Adding missing column: status to users');
+        await queryInterface3.addColumn('users', 'status', { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' });
+      }
+
+      // Convert role from ENUM to STRING to allow custom roles (Viewer, Guest, etc.)
+      if (userTableInfo.role && userTableInfo.role.type.toLowerCase().includes('enum')) {
+        console.log('Migrating users.role from ENUM to STRING');
+        await queryInterface3.changeColumn('users', 'role', { type: DataTypes.STRING, defaultValue: 'User' });
+      }
+
+      console.log('✅ Users table migrations completed successfully.');
+    } catch (error) {
+      console.warn('⚠️  Users table migration skipped or failed:', error.message);
+    }
+
+    // Roles Migrations
+    try {
+      const queryInterface4 = sequelize.getQueryInterface();
+      const roleTableInfo = await queryInterface4.describeTable('roles');
+      const roleColumns = Object.keys(roleTableInfo).map(k => k.toLowerCase());
+
+      if (!roleColumns.includes('permissions')) {
+        console.log('Adding missing column: permissions to roles');
+        await queryInterface4.addColumn('roles', 'permissions', { type: DataTypes.JSON, allowNull: true });
+      }
+      console.log('✅ Roles table migrations completed successfully.');
+    } catch (error) {
+      console.warn('⚠️  Roles table migration skipped or failed:', error.message);
+    }
+
+    return sequelize.sync();
   })
   .then(async () => {
-    console.log('Database fully synced (alter: true applied)');
+    console.log('Database synced');
 
     // Seed Permissions
     const { Permission, Role } = require('./models');
