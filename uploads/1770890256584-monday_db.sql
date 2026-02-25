@@ -283,11 +283,11 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `avatar`, `phone`, `address`, `status`, `createdAt`, `updatedAt`) VALUES
-(1, 'System Adm', 'admin@gmail.com', '$2b$10$AiIIv6K7gEdgl19NSvQaM.5ryqXZZBVpDUcacFNAz/q3JEwzSWhbO', 'Admin', NULL, NULL, NULL, 'active', '2026-02-09 09:30:28', '2026-02-10 05:42:43'),
-(2, 'kiaan tech', 'k@gmail.com', '$2b$10$nJ5nqfpobO.nubpqsPCMhuHexMg.He614AZ6ZQ7R/JPlSgk8tuTbO', 'User', NULL, '1111111111111', 'indore', 'active', '2026-02-09 09:42:21', '2026-02-10 05:45:10'),
-(3, 'kiaan 1', 'k1@gmail.com', '$2b$10$vLyOc8cs0Qze0BH.LyqCOu3oRcnDk7UO.S8dgNMlTvgEUUb/V.TqS', 'Admin', NULL, '9090909090090', 'indore', 'active', '2026-02-09 10:28:22', '2026-02-09 10:28:22'),
-(4, 'kiaan techh', 'k2@gmail.com', '$2b$10$AtFrPmMDzhOqcMjZY0ZTfuaCSNN0xBkQ7B.14I7KuGbPM8SIGP0Ry', 'User', NULL, '1111111111111', 'indore', 'active', '2026-02-09 10:30:10', '2026-02-09 10:30:10'),
-(5, 'rdewq', 'dewq@gmail.com', '$2b$10$EtHAfGcm7sp3f7bmw0j.euSvWeC91oT2z5scuiY6muzaXaB3YaqTe', 'User', NULL, 'uytrewq', 'qawdefrgnh', 'active', '2026-02-11 07:35:16', '2026-02-11 07:35:16');
+(1, 'System Adm', 'admin@gmail.com', '$2b$10$Z4MJ1iSqyyNp3SL8y90ILeWM6SOdDziJQFxkbg/DvfcMEfXT9O0qi', 'Admin', NULL, NULL, NULL, 'active', '2026-02-09 09:30:28', '2026-02-10 05:42:43'),
+(2, 'kiaan tech', 'k@gmail.com', '$2b$10$Z4MJ1iSqyyNp3SL8y90ILeWM6SOdDziJQFxkbg/DvfcMEfXT9O0qi', 'User', NULL, '1111111111111', 'indore', 'active', '2026-02-09 09:42:21', '2026-02-10 05:45:10'),
+(3, 'kiaan 1', 'k1@gmail.com', '$2b$10$Z4MJ1iSqyyNp3SL8y90ILeWM6SOdDziJQFxkbg/DvfcMEfXT9O0qi', 'Admin', NULL, '9090909090090', 'indore', 'active', '2026-02-09 10:28:22', '2026-02-09 10:28:22'),
+(4, 'kiaan techh', 'k2@gmail.com', '$2b$10$Z4MJ1iSqyyNp3SL8y90ILeWM6SOdDziJQFxkbg/DvfcMEfXT9O0qi', 'User', NULL, '1111111111111', 'indore', 'active', '2026-02-09 10:30:10', '2026-02-09 10:30:10'),
+(5, 'rdewq', 'dewq@gmail.com', '$2b$10$Z4MJ1iSqyyNp3SL8y90ILeWM6SOdDziJQFxkbg/DvfcMEfXT9O0qi', 'User', NULL, 'uytrewq', 'qawdefrgnh', 'active', '2026-02-11 07:35:16', '2026-02-11 07:35:16');
 
 --
 -- Indexes for dumped tables
