@@ -43,6 +43,26 @@ sequelize.authenticate()
   .then(async () => {
     console.log('Database connection established.');
 
+    // Helper: drop all foreign key constraints for a given column
+    const dropFK = async (table, col) => {
+      try {
+        const [constraints] = await sequelize.query(`
+          SELECT CONSTRAINT_NAME 
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+          WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = '${table}' 
+          AND COLUMN_NAME = '${col}' 
+          AND REFERENCED_TABLE_NAME IS NOT NULL
+        `);
+        if (constraints && constraints.length > 0) {
+          for (const c of constraints) {
+            console.log(`Dropping FK constraint: ${c.CONSTRAINT_NAME} on ${table}.${col}`);
+            await sequelize.query(`ALTER TABLE ${table} DROP FOREIGN KEY ${c.CONSTRAINT_NAME}`).catch(() => { });
+          }
+        }
+      } catch (err) { }
+    };
+
     // SAFE MIGRATION: Add columns if they are missing
     try {
       const queryInterface = sequelize.getQueryInterface();
@@ -56,25 +76,6 @@ sequelize.authenticate()
           if (def !== undefined) options.defaultValue = def;
           await queryInterface.addColumn('items', col, options);
         }
-      };
-
-      const dropFK = async (table, col) => {
-        try {
-          const [constraints] = await sequelize.query(`
-            SELECT CONSTRAINT_NAME 
-            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-            WHERE TABLE_SCHEMA = DATABASE()
-            AND TABLE_NAME = '${table}' 
-            AND COLUMN_NAME = '${col}' 
-            AND REFERENCED_TABLE_NAME IS NOT NULL
-          `);
-          if (constraints && constraints.length > 0) {
-            for (const c of constraints) {
-              console.log(`Dropping FK constraint: ${c.CONSTRAINT_NAME} on ${table}.${col}`);
-              await sequelize.query(`ALTER TABLE ${table} DROP FOREIGN KEY ${c.CONSTRAINT_NAME}`).catch(() => { });
-            }
-          }
-        } catch (err) { }
       };
 
       await addCol('expectedSubmissionDate', DataTypes.STRING);
