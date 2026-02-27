@@ -58,6 +58,25 @@ sequelize.authenticate()
         }
       };
 
+      const dropFK = async (table, col) => {
+        try {
+          const [constraints] = await sequelize.query(`
+            SELECT CONSTRAINT_NAME 
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = '${table}' 
+            AND COLUMN_NAME = '${col}' 
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+          `);
+          if (constraints && constraints.length > 0) {
+            for (const c of constraints) {
+              console.log(`Dropping FK constraint: ${c.CONSTRAINT_NAME} on ${table}.${col}`);
+              await sequelize.query(`ALTER TABLE ${table} DROP FOREIGN KEY ${c.CONSTRAINT_NAME}`).catch(() => { });
+            }
+          }
+        } catch (err) { }
+      };
+
       await addCol('expectedSubmissionDate', DataTypes.STRING);
       await addCol('revisionDates', DataTypes.STRING);
       await addCol('comments', DataTypes.TEXT);
@@ -88,30 +107,12 @@ sequelize.authenticate()
       await addCol('location', DataTypes.STRING);
       await addCol('link', DataTypes.TEXT);
 
-      // Ensure assignedToId is STRING (it might be INT from earlier versions/defaults)
+      // Ensure assignedToId is STRING
       if (itemColumns.includes('assignedtoid')) {
-        // Proactively remove any foreign key constraints if we are changing type
-        try {
-          const [constraints] = await sequelize.query(`
-            SELECT CONSTRAINT_NAME 
-            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-            WHERE TABLE_SCHEMA = DATABASE()
-            AND TABLE_NAME = 'items' 
-            AND COLUMN_NAME = 'assignedToId' 
-            AND REFERENCED_TABLE_NAME IS NOT NULL
-          `);
-          if (constraints && constraints.length > 0) {
-            for (const c of constraints) {
-              console.log(`Dropping existing FK constraint: ${c.CONSTRAINT_NAME}`);
-              await sequelize.query(`ALTER TABLE items DROP FOREIGN KEY ${c.CONSTRAINT_NAME}`).catch(() => { });
-            }
-          }
-        } catch (err) { }
-
-        // Find the actual case sensitive key
+        await dropFK('items', 'assignedToId');
         const actualKey = Object.keys(tableInfo).find(k => k.toLowerCase() === 'assignedtoid');
         if (tableInfo[actualKey].type.toLowerCase().includes('int')) {
-          console.log('Migrating assignedToId from INT to STRING to support Team IDs');
+          console.log('Migrating assignedToId to STRING');
           await queryInterface.changeColumn('items', 'assignedToId', { type: DataTypes.STRING, allowNull: true });
         }
       }
@@ -119,8 +120,14 @@ sequelize.authenticate()
       // Migrate Item IDs to BIGINT
       if (tableInfo.id && tableInfo.id.type.toLowerCase().includes('int') && !tableInfo.id.type.toLowerCase().includes('big')) {
         console.log('Migrating items.id to BIGINT');
-        // Removing foreign keys first might be needed but items.id is usually referenced by items.parentItemId and time_sessions.itemId
-        await queryInterface.changeColumn('items', 'id', { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true, allowNull: false });
+        // Must drop ALL referencing foreign keys first
+        await dropFK('time_sessions', 'itemId');
+        await dropFK('time_sessions', 'parentItemId');
+        await dropFK('files', 'ItemId');
+        await dropFK('items', 'parentItemId');
+
+        // Use raw query for MySQL to avoid "Multiple primary key" issue with changeColumn
+        await sequelize.query('ALTER TABLE items MODIFY id BIGINT NOT NULL AUTO_INCREMENT');
       }
       if (tableInfo.parentItemId && tableInfo.parentItemId.type.toLowerCase().includes('int') && !tableInfo.parentItemId.type.toLowerCase().includes('big')) {
         console.log('Migrating items.parentItemId to BIGINT');
@@ -140,13 +147,11 @@ sequelize.authenticate()
           console.log('Adding missing column: festivalBonus to payroll');
           await queryInterface.addColumn('payroll', 'festivalBonus', { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 });
         }
-      } catch (err) {
-        console.warn('Payroll table migration skipped (maybe it doesn\'t exist yet):', err.message);
-      }
+      } catch (err) { }
 
-      console.log('✅ All column migrations completed successfully.');
+      console.log('✅ All item table migrations completed.');
     } catch (error) {
-      console.warn('⚠️  Table migration skipped (items table may not exist yet):', error.message);
+      console.warn('⚠️  Table migration failed:', error.message);
     }
 
     // Boards Migrations
@@ -203,10 +208,20 @@ sequelize.authenticate()
         await queryInterface3.addColumn('users', 'status', { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' });
       }
 
-      // Convert role from ENUM to STRING to allow custom roles (Viewer, Guest, etc.)
+      // Migrate role from ENUM to STRING
       if (userTableInfo.role && userTableInfo.role.type.toLowerCase().includes('enum')) {
         console.log('Migrating users.role from ENUM to STRING');
         await queryInterface3.changeColumn('users', 'role', { type: DataTypes.STRING, defaultValue: 'User' });
+      }
+
+      // Migrate User IDs to BIGINT
+      if (userTableInfo.id && userTableInfo.id.type.toLowerCase().includes('int') && !userTableInfo.id.type.toLowerCase().includes('big')) {
+        console.log('Migrating users.id to BIGINT');
+        await dropFK('notifications', 'UserId');
+        await dropFK('boards', 'ownerId');
+        await dropFK('time_sessions', 'userId');
+        await dropFK('files', 'userId');
+        await sequelize.query('ALTER TABLE users MODIFY id BIGINT NOT NULL AUTO_INCREMENT');
       }
 
       console.log('✅ Users table migrations completed successfully.');
@@ -237,10 +252,12 @@ sequelize.authenticate()
 
       if (timeTableInfo.itemId && timeTableInfo.itemId.type.toLowerCase().includes('int')) {
         console.log('Migrating time_sessions.itemId from INT to BIGINT');
+        await dropFK('time_sessions', 'itemId');
         await queryInterface5.changeColumn('time_sessions', 'itemId', { type: DataTypes.BIGINT, allowNull: false });
       }
       if (timeTableInfo.userId && timeTableInfo.userId.type.toLowerCase().includes('int')) {
         console.log('Migrating time_sessions.userId from INT to BIGINT');
+        await dropFK('time_sessions', 'userId');
         await queryInterface5.changeColumn('time_sessions', 'userId', { type: DataTypes.BIGINT, allowNull: false });
       }
 

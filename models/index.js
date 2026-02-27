@@ -22,6 +22,7 @@ const sequelize = new Sequelize(
 );
 
 const User = sequelize.define('User', {
+  id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING, allowNull: false },
   email: { type: DataTypes.STRING, allowNull: false, unique: true },
   password: { type: DataTypes.STRING, allowNull: false },
@@ -36,6 +37,7 @@ const User = sequelize.define('User', {
 });
 
 const Board = sequelize.define('Board', {
+  id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING, allowNull: false },
   type: { type: DataTypes.STRING, defaultValue: 'board' }, // pipeline, ai-future, etc.
   workspace: { type: DataTypes.STRING, defaultValue: 'Main Workspace' },
@@ -56,6 +58,7 @@ const Folder = sequelize.define('Folder', {
 });
 
 const Group = sequelize.define('Group', {
+  id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
   title: { type: DataTypes.STRING, allowNull: false },
   color: { type: DataTypes.STRING }
 }, {
@@ -63,6 +66,7 @@ const Group = sequelize.define('Group', {
 });
 
 const Item = sequelize.define('Item', {
+  id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING, allowNull: false },
   status: { type: DataTypes.STRING }, // Main status
   person: { type: DataTypes.STRING }, // Legacy string field, prefer assignedToId
