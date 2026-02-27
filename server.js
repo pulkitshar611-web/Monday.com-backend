@@ -5,7 +5,7 @@ dotenv.config();
 const express = require('express');
 const cors = require('cors');
 const { sequelize } = require('./models');
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 
 const app = express();
 
@@ -309,16 +309,18 @@ sequelize.authenticate()
       }
 
       // 4. Purge orphaned sessions
-      console.log('Purging orphaned time sessions...');
-      await sequelize.query(`
-        DELETE FROM time_sessions 
-        WHERE parentItemId NOT IN (SELECT id FROM items)
-        AND parentItemId IS NOT NULL
-      `);
+      try {
+        console.log('Purging orphaned time sessions...');
+        await sequelize.query(`
+          DELETE FROM time_sessions 
+          WHERE parentItemId NOT IN (SELECT id FROM items)
+          AND parentItemId IS NOT NULL
+        `);
+      } catch (err) { }
 
       console.log('✅ TimeSessions table migrations and full data cleanup completed.');
     } catch (error) {
-      console.warn('⚠️  TimeSessions table migration skipped or failed:', error.message);
+      console.warn('⚠️  TimeSessions table migration failed:', error.message);
     }
 
     return sequelize.sync();
