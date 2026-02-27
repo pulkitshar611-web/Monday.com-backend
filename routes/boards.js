@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const checkPermission = require('../middleware/checkPermission');
-const { Board, Group, Item, User } = require('../models');
+const { Board, Group, Item, User, sequelize } = require('../models');
+const { Op } = require('sequelize');
 const checkBoardAccess = require('../middleware/checkBoardAccess');
 
 // DEBUG LOG: Ensure this file is loaded
@@ -39,6 +40,19 @@ router.delete('/:id', auth, async (req, res) => {
     }
 
     await board.destroy();
+
+    // Extra cleanup to ensure all related time sessions are removed from the log
+    try {
+      const { sequelize } = require('../models');
+      await sequelize.query(`
+            DELETE FROM time_sessions 
+            WHERE parentItemId NOT IN (SELECT id FROM items)
+            AND parentItemId IS NOT NULL
+        `);
+    } catch (cleanupErr) {
+      console.warn('[CLEANUP WARN] Orphaned session purge failed:', cleanupErr.message);
+    }
+
     console.log(`[DELETE SUCCESS] Board ${boardId} has been removed.`);
     res.json({ msg: 'Board deleted successfully', id: boardId, success: true });
   } catch (err) {
@@ -118,9 +132,20 @@ router.get('/', auth, async (req, res) => {
       include: commonInclude
     });
 
-    // 2. Identify boards where user is assigned to items
+    // 2. Identify boards where user is assigned to items (check ALL assignment fields)
+    const userId = String(req.user.id);
+
+    // Check assignedToId field + people JSON field + person legacy field
     const assignedItems = await Item.findAll({
-      where: { assignedToId: String(req.user.id) },
+      where: {
+        [Op.or]: [
+          { assignedToId: userId },
+          // people column stores JSON like ["1","2"] or [{"id":"1"},...]
+          { people: { [Op.like]: `%"${userId}"%` } },
+          // person column (legacy string field)
+          { person: userId }
+        ]
+      },
       include: [{
         model: Group,
         as: 'Group',
@@ -134,10 +159,30 @@ router.get('/', auth, async (req, res) => {
     }).filter(id => id))];
 
     // 3. Filter and mark access
-    const filteredBoards = allBoards.map(b => {
+    const filteredBoards = allBoards.filter(b => {
+      if (isAdmin || isManager) return true;
+
+      // Check folder permission
+      if (req.user.permissions?.folders && Array.isArray(req.user.permissions.folders)) {
+        if (req.user.permissions.folders.includes(b.folder)) return true;
+      }
+
+      // Check assignment
+      return assignedBoardIds.includes(b.id);
+    }).map(b => {
       const board = b.toJSON();
-      board.access = 'full';
-      board.isCoordinator = true;
+
+      const hasFullAccess = isAdmin || isManager ||
+        (req.user.permissions?.folders?.includes(b.folder)) ||
+        String(b.ownerId) === String(req.user.id);
+
+      if (hasFullAccess) {
+        board.access = 'full';
+        board.isCoordinator = true;
+      } else {
+        board.access = 'assigned';
+        board.isCoordinator = false;
+      }
       return board;
     });
 

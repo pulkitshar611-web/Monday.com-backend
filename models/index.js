@@ -96,7 +96,7 @@ const Item = sequelize.define('Item', {
   updates: { type: DataTypes.TEXT }, // JSON string of updates array
   filesData: { type: DataTypes.TEXT }, // JSON string of files array (renamed to avoid collision with association)
   activity: { type: DataTypes.TEXT }, // JSON string of activity log array
-  parentItemId: { type: DataTypes.INTEGER, allowNull: true }, // For subitems
+  parentItemId: { type: DataTypes.BIGINT, allowNull: true }, // For subitems
   subItemsData: { type: DataTypes.TEXT }, // JSON string of subitems array (renamed to avoid collision with association)
   connectTasks: { type: DataTypes.TEXT }, // JSON string of connected tasks
   assignedToId: { type: DataTypes.STRING }, // Support for both User IDs (int) and Team IDs (string)
@@ -163,14 +163,41 @@ const Permission = sequelize.define('Permission', {
 
 const TimeSession = sequelize.define('TimeSession', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  itemId: { type: DataTypes.INTEGER, allowNull: false },
-  userId: { type: DataTypes.INTEGER, allowNull: false },
+  itemId: { type: DataTypes.BIGINT, allowNull: false },
+  userId: { type: DataTypes.BIGINT, allowNull: false },
+  parentItemId: { type: DataTypes.BIGINT, allowNull: true },
+  itemName: { type: DataTypes.STRING },
   startTime: { type: DataTypes.DATE },
   endTime: { type: DataTypes.DATE },
-  duration: { type: DataTypes.INTEGER, defaultValue: 0 }, // Accumulated duration in seconds
+  duration: { type: DataTypes.INTEGER, defaultValue: 0 },
   isActive: { type: DataTypes.BOOLEAN, defaultValue: false }
 }, {
   tableName: 'time_sessions'
+});
+
+const Payroll = sequelize.define('Payroll', {
+  name: { type: DataTypes.STRING, allowNull: false },
+  employeeId: { type: DataTypes.STRING },
+  role: { type: DataTypes.STRING },
+  department: { type: DataTypes.STRING },
+  totalWorkingDays: { type: DataTypes.INTEGER, defaultValue: 22 },
+  presentDays: { type: DataTypes.INTEGER, defaultValue: 0 },
+  leaveDays: { type: DataTypes.INTEGER, defaultValue: 0 },
+  overtimeHours: { type: DataTypes.INTEGER, defaultValue: 0 },
+  totalWorkedHours: { type: DataTypes.INTEGER, defaultValue: 0 },
+  basicSalary: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  overtimeRate: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  performanceBonus: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  festivalBonus: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  bonus: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  tdsPercent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
+  paymentStatus: { type: DataTypes.ENUM('Pending', 'Approved', 'Paid'), defaultValue: 'Pending' },
+  paymentDate: { type: DataTypes.DATE },
+  remarks: { type: DataTypes.TEXT },
+  month: { type: DataTypes.STRING }, // e.g. "October 2024"
+  year: { type: DataTypes.INTEGER }
+}, {
+  tableName: 'payroll'
 });
 
 
@@ -208,6 +235,10 @@ User.belongsTo(Role, { foreignKey: 'roleId' });
 Item.hasMany(TimeSession, { as: 'timeSessions', foreignKey: 'itemId', onDelete: 'CASCADE' });
 TimeSession.belongsTo(Item, { foreignKey: 'itemId' });
 
+// Associate session with the REAL parent record (for virtual subitems)
+Item.hasMany(TimeSession, { as: 'childTimeSessions', foreignKey: 'parentItemId', onDelete: 'CASCADE' });
+TimeSession.belongsTo(Item, { as: 'parentItem', foreignKey: 'parentItemId' });
+
 User.hasMany(TimeSession, { as: 'timeSessions', foreignKey: 'userId', onDelete: 'CASCADE' });
 TimeSession.belongsTo(User, { foreignKey: 'userId' });
 
@@ -225,6 +256,7 @@ module.exports = {
   Automation,
   Role,
   Permission,
-  TimeSession
+  TimeSession,
+  Payroll
 };
 

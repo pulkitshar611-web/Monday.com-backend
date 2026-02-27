@@ -11,26 +11,22 @@ router.post('/start', auth, async (req, res) => {
         const { itemId } = req.body;
         const userId = req.user.id;
 
-        // Check if there's already an active session for this user
+        // We allow multiple active sessions now, so we don't stop the active session.
+        // But let's just make sure there isn't already an active session for *this specific item*
         const activeSession = await TimeSession.findOne({
-            where: { userId, isActive: true }
+            where: { userId, itemId, isActive: true }
         });
 
         if (activeSession) {
-            // Stop current session first
-            const now = new Date();
-            const start = new Date(activeSession.startTime);
-            const diffSeconds = Math.floor((now - start) / 1000);
-            activeSession.endTime = now;
-            activeSession.duration += diffSeconds;
-            activeSession.isActive = false;
-            await activeSession.save();
+            return res.json(activeSession);
         }
 
         // Create new session
         const newSession = await TimeSession.create({
             itemId,
             userId,
+            parentItemId: req.body.parentItemId || itemId,
+            itemName: req.body.itemName,
             startTime: new Date(),
             isActive: true
         });
@@ -46,9 +42,12 @@ router.post('/start', auth, async (req, res) => {
 // @desc    Stop active time session
 router.post('/stop', auth, async (req, res) => {
     try {
+        const { itemId } = req.body;
         const userId = req.user.id;
+        console.log(`[TIME STOP] User ${userId} stopping item ${itemId}`);
+
         const activeSession = await TimeSession.findOne({
-            where: { userId, isActive: true }
+            where: { userId, itemId, isActive: true }
         });
 
         if (!activeSession) {
@@ -142,14 +141,14 @@ router.get('/board/:boardId', auth, async (req, res) => {
 });
 
 // @route   GET api/time/active
-// @desc    Get current active session for user
+// @desc    Get current active sessions for user
 router.get('/active', auth, async (req, res) => {
     try {
-        const session = await TimeSession.findOne({
+        const sessions = await TimeSession.findAll({
             where: { userId: req.user.id, isActive: true },
             include: [{ model: Item, attributes: ['id', 'name'] }]
         });
-        res.json(session);
+        res.json(sessions);
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -166,9 +165,15 @@ router.get('/stats', auth, async (req, res) => {
                 { model: User, attributes: ['id', 'name', 'avatar'] },
                 {
                     model: Item,
+                    attributes: ['id', 'name']
+                },
+                {
+                    model: Item,
+                    as: 'parentItem',
+                    attributes: ['id', 'name', 'status'],
                     include: [{
                         model: Group,
-                        include: [{ model: Board, attributes: ['id', 'name'] }]
+                        include: [{ model: Board, attributes: ['id', 'name', 'folder'] }]
                     }]
                 }
             ]
@@ -178,7 +183,8 @@ router.get('/stats', auth, async (req, res) => {
             totalDuration: 0,
             byUser: {},
             byBoard: {},
-            lastSessions: sessions.slice(-10).reverse()
+            byProject: {}, // New: Track duration by specific project
+            lastSessions: sessions.reverse()
         };
 
         sessions.forEach(session => {
@@ -194,13 +200,28 @@ router.get('/stats', auth, async (req, res) => {
                 stats.byUser[session.userId] = {
                     id: session.userId,
                     name: session.User.name,
-                    total: 0
+                    total: 0,
+                    isActive: session.isActive
                 };
             }
             stats.byUser[session.userId].total += duration;
+            if (session.isActive) stats.byUser[session.userId].isActive = true;
 
-            // Group by board
-            const board = session.Item?.Group?.Board;
+            // Group by Project (Parent Item)
+            const project = session.parentItem || session.Item;
+            if (project) {
+                if (!stats.byProject[project.id]) {
+                    stats.byProject[project.id] = {
+                        id: project.id,
+                        name: project.name,
+                        total: 0
+                    };
+                }
+                stats.byProject[project.id].total += duration;
+            }
+
+            // Group by board (Traversing from parentItem -> Group -> Board)
+            const board = session.parentItem?.Group?.Board;
             if (board) {
                 if (!stats.byBoard[board.id]) {
                     stats.byBoard[board.id] = {

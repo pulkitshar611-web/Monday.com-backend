@@ -2,14 +2,30 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const { Item, Notification, Group, Board, User } = require('../models');
+const { Op } = require('sequelize');
 const checkBoardAccess = require('../middleware/checkBoardAccess');
 
 // @route   GET api/items/my
 // @desc    Get items assigned to the current user
 router.get('/my', auth, async (req, res) => {
   try {
+    const isAdmin = req.user.role === 'Admin';
+    const isManager = req.user.role === 'Manager';
+
+    // Admins/Managers see all items; regular users see only their assigned items
+    const userId = String(req.user.id);
+    const whereClause = (isAdmin || isManager) ? {} : {
+      [Op.or]: [
+        { assignedToId: userId },
+        // people column stores JSON array e.g. ["1","2"] or [{"id":"1"},...]
+        { people: { [Op.like]: `%"${userId}"%` } },
+        // person column (legacy string field)
+        { person: userId }
+      ]
+    };
+
     const items = await Item.findAll({
-      where: {}, // Return all items for full visibility
+      where: whereClause,
       include: [
         {
           model: Group,
@@ -115,11 +131,62 @@ router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
 
     await item.update(updates);
 
-    // If assignment changed, notify new user
-    // SKIP if it's a Team ID (from frontend localstorage, usually 13+ digits)
+    // ─── SYNC: If 'people' column changed, extract IDs and notify each new person ───
+    if (req.body.people !== undefined) {
+      let peopleList = [];
+      try {
+        const raw = req.body.people;
+        peopleList = Array.isArray(raw) ? raw : (typeof raw === 'string' ? JSON.parse(raw) : []);
+      } catch (e) { peopleList = []; }
+
+      // Extract IDs (supports both [{id, name}] and ["1","2"] formats)
+      const newPeopleIds = peopleList
+        .map(p => String(typeof p === 'object' ? p.id : p))
+        .filter(id => id && id.length <= 10); // skip team IDs (>10 chars)
+
+      // Auto-sync assignedToId to the first person in the list
+      if (newPeopleIds.length > 0) {
+        const firstPersonId = newPeopleIds[0];
+        if (String(item.assignedToId) !== firstPersonId) {
+          await item.update({ assignedToId: firstPersonId });
+        }
+      }
+
+      // Get old people list to find newly added people
+      let oldPeopleIds = [];
+      try {
+        const oldRaw = item.people;
+        const oldList = Array.isArray(oldRaw) ? oldRaw : (typeof oldRaw === 'string' ? JSON.parse(oldRaw) : []);
+        oldPeopleIds = oldList.map(p => String(typeof p === 'object' ? p.id : p));
+      } catch (e) { oldPeopleIds = []; }
+
+      // Send notification to newly added people
+      for (const personId of newPeopleIds) {
+        if (!oldPeopleIds.includes(personId) && personId !== String(req.user.id)) {
+          try {
+            await Notification.create({
+              UserId: parseInt(personId),
+              content: `You have been assigned a task: ${item.name}`,
+              type: 'task_assigned',
+              link: `/board`
+            });
+          } catch (e) { /* skip if user not found */ }
+        }
+      }
+    }
+
+    // ─── SYNC: If 'person' (legacy) column changed, also update assignedToId ───
+    if (req.body.person !== undefined && req.body.assignedToId === undefined) {
+      const personId = String(req.body.person);
+      if (personId && personId.length <= 10 && String(item.assignedToId) !== personId) {
+        await item.update({ assignedToId: personId });
+      }
+    }
+
+    // ─── If assignedToId directly changed, notify the new user ───
     const newAssignedId = req.body.assignedToId;
     const isTeamId = newAssignedId && String(newAssignedId).length > 10;
-    if (newAssignedId && newAssignedId !== oldAssigneeId && !isTeamId) {
+    if (newAssignedId && String(newAssignedId) !== String(oldAssigneeId) && !isTeamId) {
       await Notification.create({
         UserId: newAssignedId,
         content: `You have been assigned a task: ${item.name}`,

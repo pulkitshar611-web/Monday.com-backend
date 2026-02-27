@@ -1,4 +1,5 @@
 const { Board, Group, Item } = require('../models');
+const { Op } = require('sequelize');
 
 /**
  * Middleware to check if a user has 'full' access to a board.
@@ -10,12 +11,13 @@ module.exports = async (req, res, next) => {
         const { id, role, permissions } = req.user;
         const isAdmin = role === 'Admin';
         const isManager = role === 'Manager';
-        const canViewAll = permissions?.viewAllData === true;
 
-        // Requested by user: All authenticated users have full access like Admin
-        req.boardAccess = 'full';
-        req.isCoordinator = true;
-        return next();
+        // Admins and Managers have full access
+        if (isAdmin || isManager) {
+            req.boardAccess = 'full';
+            req.isCoordinator = true;
+            return next();
+        }
 
         // Determine target BoardId based on the request
         let boardId = req.params.boardId || req.body.BoardId;
@@ -49,17 +51,34 @@ module.exports = async (req, res, next) => {
             return next();
         }
 
-        // 2. Coordinator Check: Check if user is the Board Owner
         const board = await Board.findByPk(boardId);
-        if (board && String(board.ownerId) === String(id)) {
+        if (!board) return next();
+
+        // Check Folder Permission
+        if (permissions?.folders && Array.isArray(permissions.folders)) {
+            if (permissions.folders.includes(board.folder)) {
+                req.boardAccess = 'full';
+                req.isCoordinator = true;
+                return next();
+            }
+        }
+
+        if (String(board.ownerId) === String(id)) {
             req.boardAccess = 'full';
             req.isCoordinator = true;
             return next();
         }
 
-        // 3. Assignment Check: Check if user has any assigned tasks on this board
+        // 3. Assignment Check: Check if user is assigned (via any field) to any item on this board
+        const userId = String(id);
         const assignmentCount = await Item.count({
-            where: { assignedToId: String(id) },
+            where: {
+                [Op.or]: [
+                    { assignedToId: userId },
+                    { people: { [Op.like]: `%"${userId}"%` } },
+                    { person: userId }
+                ]
+            },
             include: [{
                 model: Group,
                 where: { BoardId: boardId }

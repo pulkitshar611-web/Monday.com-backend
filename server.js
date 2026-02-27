@@ -33,6 +33,7 @@ app.use('/api/roles', require('./routes/roles'));
 app.use('/api/permissions', require('./routes/permissions'));
 app.use('/api/folders', require('./routes/folders'));
 app.use('/api/time', require('./routes/timeTracking'));
+app.use('/api/payroll', require('./routes/payroll'));
 
 
 
@@ -113,6 +114,34 @@ sequelize.authenticate()
           console.log('Migrating assignedToId from INT to STRING to support Team IDs');
           await queryInterface.changeColumn('items', 'assignedToId', { type: DataTypes.STRING, allowNull: true });
         }
+      }
+
+      // Migrate Item IDs to BIGINT
+      if (tableInfo.id && tableInfo.id.type.toLowerCase().includes('int') && !tableInfo.id.type.toLowerCase().includes('big')) {
+        console.log('Migrating items.id to BIGINT');
+        // Removing foreign keys first might be needed but items.id is usually referenced by items.parentItemId and time_sessions.itemId
+        await queryInterface.changeColumn('items', 'id', { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true, allowNull: false });
+      }
+      if (tableInfo.parentItemId && tableInfo.parentItemId.type.toLowerCase().includes('int') && !tableInfo.parentItemId.type.toLowerCase().includes('big')) {
+        console.log('Migrating items.parentItemId to BIGINT');
+        await queryInterface.changeColumn('items', 'parentItemId', { type: DataTypes.BIGINT, allowNull: true });
+      }
+
+      // Payroll migrations
+      try {
+        const payrollInfo = await queryInterface.describeTable('payroll');
+        const payrollCols = Object.keys(payrollInfo).map(k => k.toLowerCase());
+
+        if (!payrollCols.includes('performancebonus')) {
+          console.log('Adding missing column: performanceBonus to payroll');
+          await queryInterface.addColumn('payroll', 'performanceBonus', { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 });
+        }
+        if (!payrollCols.includes('festivalbonus')) {
+          console.log('Adding missing column: festivalBonus to payroll');
+          await queryInterface.addColumn('payroll', 'festivalBonus', { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 });
+        }
+      } catch (err) {
+        console.warn('Payroll table migration skipped (maybe it doesn\'t exist yet):', err.message);
       }
 
       console.log('✅ All column migrations completed successfully.');
@@ -198,6 +227,81 @@ sequelize.authenticate()
       console.log('✅ Roles table migrations completed successfully.');
     } catch (error) {
       console.warn('⚠️  Roles table migration skipped or failed:', error.message);
+    }
+
+    // TimeSessions Migrations
+    try {
+      const queryInterface5 = sequelize.getQueryInterface();
+      const timeTableInfo = await queryInterface5.describeTable('time_sessions');
+      const timeColumns = Object.keys(timeTableInfo).map(k => k.toLowerCase());
+
+      if (timeTableInfo.itemId && timeTableInfo.itemId.type.toLowerCase().includes('int')) {
+        console.log('Migrating time_sessions.itemId from INT to BIGINT');
+        await queryInterface5.changeColumn('time_sessions', 'itemId', { type: DataTypes.BIGINT, allowNull: false });
+      }
+      if (timeTableInfo.userId && timeTableInfo.userId.type.toLowerCase().includes('int')) {
+        console.log('Migrating time_sessions.userId from INT to BIGINT');
+        await queryInterface5.changeColumn('time_sessions', 'userId', { type: DataTypes.BIGINT, allowNull: false });
+      }
+
+      if (!timeColumns.includes('parentitemid')) {
+        console.log('Adding missing column: parentItemId to time_sessions');
+        await queryInterface5.addColumn('time_sessions', 'parentItemId', { type: DataTypes.BIGINT, allowNull: true });
+      }
+
+      if (!timeColumns.includes('itemname')) {
+        console.log('Adding missing column: itemName to time_sessions');
+        await queryInterface5.addColumn('time_sessions', 'itemName', { type: DataTypes.STRING, allowNull: true });
+      }
+
+      // 1. Backfill parentItemId
+      await sequelize.query('UPDATE time_sessions SET parentItemId = itemId WHERE parentItemId IS NULL');
+
+      // 2. Backfill itemName for standard items
+      await sequelize.query(`
+        UPDATE time_sessions ts
+        JOIN items i ON ts.itemId = i.id
+        SET ts.itemName = i.name
+        WHERE ts.itemName IS NULL
+      `);
+
+      // 3. Backfill itemName for virtual subitems (deep parse subItemsData)
+      try {
+        const { Item } = require('./models');
+        const itemsWithSubData = await Item.findAll({
+          where: { subItemsData: { [Op.not]: null } },
+          attributes: ['id', 'subItemsData']
+        });
+
+        for (const parent of itemsWithSubData) {
+          try {
+            const subItems = JSON.parse(parent.subItemsData);
+            if (Array.isArray(subItems)) {
+              for (const sub of subItems) {
+                if (sub.id && sub.name) {
+                  await sequelize.query('UPDATE time_sessions SET itemName = :name WHERE itemId = :id AND itemName IS NULL', {
+                    replacements: { name: sub.name, id: sub.id }
+                  });
+                }
+              }
+            }
+          } catch (e) { }
+        }
+      } catch (e) {
+        console.warn('Virtual subitem backfill failed:', e.message);
+      }
+
+      // 4. Purge orphaned sessions
+      console.log('Purging orphaned time sessions...');
+      await sequelize.query(`
+        DELETE FROM time_sessions 
+        WHERE parentItemId NOT IN (SELECT id FROM items)
+        AND parentItemId IS NOT NULL
+      `);
+
+      console.log('✅ TimeSessions table migrations and full data cleanup completed.');
+    } catch (error) {
+      console.warn('⚠️  TimeSessions table migration skipped or failed:', error.message);
     }
 
     return sequelize.sync();
