@@ -250,15 +250,23 @@ sequelize.authenticate()
       const timeTableInfo = await queryInterface5.describeTable('time_sessions');
       const timeColumns = Object.keys(timeTableInfo).map(k => k.toLowerCase());
 
-      if (timeTableInfo.itemId && timeTableInfo.itemId.type.toLowerCase().includes('int')) {
+      const isIntButNotBig = (colInfo) => {
+        if (!colInfo) return false;
+        const type = colInfo.type.toLowerCase();
+        return type.includes('int') && !type.includes('big');
+      };
+
+      if (isIntButNotBig(timeTableInfo.itemId)) {
         console.log('Migrating time_sessions.itemId from INT to BIGINT');
         await dropFK('time_sessions', 'itemId');
         await queryInterface5.changeColumn('time_sessions', 'itemId', { type: DataTypes.BIGINT, allowNull: false });
+        console.log('✅ time_sessions.itemId migrated.');
       }
-      if (timeTableInfo.userId && timeTableInfo.userId.type.toLowerCase().includes('int')) {
+      if (isIntButNotBig(timeTableInfo.userId)) {
         console.log('Migrating time_sessions.userId from INT to BIGINT');
         await dropFK('time_sessions', 'userId');
         await queryInterface5.changeColumn('time_sessions', 'userId', { type: DataTypes.BIGINT, allowNull: false });
+        console.log('✅ time_sessions.userId migrated.');
       }
 
       if (!timeColumns.includes('parentitemid')) {
@@ -283,12 +291,9 @@ sequelize.authenticate()
       `);
 
       // 3. Backfill itemName for virtual subitems (deep parse subItemsData)
+      // 3. Backfill itemName for virtual subitems
       try {
-        const { Item } = require('./models');
-        const itemsWithSubData = await Item.findAll({
-          where: { subItemsData: { [Op.not]: null } },
-          attributes: ['id', 'subItemsData']
-        });
+        const [itemsWithSubData] = await sequelize.query('SELECT id, subItemsData FROM items WHERE subItemsData IS NOT NULL');
 
         for (const parent of itemsWithSubData) {
           try {
