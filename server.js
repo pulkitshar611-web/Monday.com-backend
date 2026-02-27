@@ -269,15 +269,25 @@ sequelize.authenticate()
         console.log('✅ time_sessions.userId migrated.');
       }
 
-      if (!timeColumns.includes('parentitemid')) {
-        console.log('Adding missing column: parentItemId to time_sessions');
-        await queryInterface5.addColumn('time_sessions', 'parentItemId', { type: DataTypes.BIGINT, allowNull: true });
-      }
+      // Force add parentItemId to time_sessions
+      try {
+        await sequelize.query('ALTER TABLE time_sessions ADD COLUMN parentItemId BIGINT NULL').catch(err => {
+          if (!err.message.includes('duplicate column')) {
+            console.warn('Silent parentItemId add:', err.message);
+          }
+        });
+        console.log('✅ Checked time_sessions.parentItemId');
+      } catch (err) { }
 
-      if (!timeColumns.includes('itemname')) {
-        console.log('Adding missing column: itemName to time_sessions');
-        await queryInterface5.addColumn('time_sessions', 'itemName', { type: DataTypes.STRING, allowNull: true });
-      }
+      // Force add itemName to time_sessions
+      try {
+        await sequelize.query('ALTER TABLE time_sessions ADD COLUMN itemName VARCHAR(255) NULL').catch(err => {
+          if (!err.message.includes('duplicate column')) {
+            console.warn('Silent itemName add:', err.message);
+          }
+        });
+        console.log('✅ Checked time_sessions.itemName');
+      } catch (err) { }
 
       // 1. Backfill parentItemId
       await sequelize.query('UPDATE time_sessions SET parentItemId = itemId WHERE parentItemId IS NULL');
