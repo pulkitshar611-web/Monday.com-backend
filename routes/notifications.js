@@ -23,9 +23,10 @@ router.get('/', auth, async (req, res) => {
 // @route   PATCH api/notifications/:id
 router.patch('/:id', auth, async (req, res) => {
   try {
-    const notification = await Notification.findOne({
-      where: { id: req.params.id, UserId: req.user.id }
-    });
+    const isAdmin = req.user.role === 'Admin' || req.user.role === 'Manager';
+    const where = isAdmin ? { id: req.params.id } : { id: req.params.id, UserId: req.user.id };
+
+    const notification = await Notification.findOne({ where });
     if (!notification) return res.status(404).json({ msg: 'Notification not found' });
 
     await notification.update({ isRead: true });
