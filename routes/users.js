@@ -38,21 +38,21 @@ router.get('/me', auth, (req, res) => {
 // @desc    Get all users
 router.get('/', auth, async (req, res) => {
   try {
-    // Allow all authenticated users to see user list (required for person picker/assignments)
-    // if (req.user.role !== 'Admin') return res.status(403).json({ msg: 'Access denied' });
+    const isAdmin = req.user.role === 'Admin' || req.user.role === 'Manager';
     const { Item, Group, Board, Role } = require('../models');
+
     const users = await User.findAll({
       attributes: { exclude: ['password'] },
       include: [
         { model: Role },
-        {
+        ...(isAdmin ? [{
           model: Item,
           as: 'AssignedItems',
           include: [{
             model: Group,
             include: [{ model: Board }]
           }]
-        }
+        }] : [])
       ]
     });
 

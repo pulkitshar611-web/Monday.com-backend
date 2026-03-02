@@ -89,6 +89,9 @@ router.get('/item/:itemId', auth, async (req, res) => {
 // @desc    Get aggregated time for a board
 router.get('/board/:boardId', auth, async (req, res) => {
     try {
+        const isAdmin = req.user.role === 'Admin' || req.user.role === 'Manager';
+        const userId = req.user.id;
+
         const board = await Board.findByPk(req.params.boardId, {
             include: [{
                 model: Group,
@@ -99,6 +102,8 @@ router.get('/board/:boardId', auth, async (req, res) => {
                     include: [{
                         model: TimeSession,
                         as: 'timeSessions',
+                        where: isAdmin ? {} : { userId }, // Filter sessions by user if not admin
+                        required: false,
                         include: [{ model: User, attributes: ['id', 'name'] }]
                     }]
                 }]
@@ -111,25 +116,27 @@ router.get('/board/:boardId', auth, async (req, res) => {
         const userStats = {};
         board.Groups.forEach(group => {
             group.items.forEach(item => {
-                item.timeSessions.forEach(session => {
-                    if (!userStats[session.userId]) {
-                        userStats[session.userId] = {
-                            userId: session.userId,
-                            userName: session.User.name,
-                            totalDuration: 0,
-                            sessions: []
-                        };
-                    }
+                if (item.timeSessions) {
+                    item.timeSessions.forEach(session => {
+                        if (!userStats[session.userId]) {
+                            userStats[session.userId] = {
+                                userId: session.userId,
+                                userName: session.User.name,
+                                totalDuration: 0,
+                                sessions: []
+                            };
+                        }
 
-                    let sessionDuration = session.duration;
-                    if (session.isActive) {
-                        const now = new Date();
-                        const start = new Date(session.startTime);
-                        sessionDuration += Math.floor((now - start) / 1000);
-                    }
+                        let sessionDuration = session.duration;
+                        if (session.isActive) {
+                            const now = new Date();
+                            const start = new Date(session.startTime);
+                            sessionDuration += Math.floor((now - start) / 1000);
+                        }
 
-                    userStats[session.userId].totalDuration += sessionDuration;
-                });
+                        userStats[session.userId].totalDuration += sessionDuration;
+                    });
+                }
             });
         });
 
@@ -156,11 +163,14 @@ router.get('/active', auth, async (req, res) => {
 });
 
 // @route   GET api/time/stats
-
 // @desc    Get aggregated time stats for all users and boards
 router.get('/stats', auth, async (req, res) => {
     try {
+        const isAdmin = req.user.role === 'Admin' || req.user.role === 'Manager';
+        const userId = req.user.id;
+
         const sessions = await TimeSession.findAll({
+            where: isAdmin ? {} : { userId }, // Filter main sessions list if not admin
             include: [
                 { model: User, attributes: ['id', 'name', 'avatar'] },
                 {

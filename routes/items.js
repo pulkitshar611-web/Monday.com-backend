@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { Item, Notification, Group, Board, User } = require('../models');
+const { Item, Notification, Group, Board, User, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const checkBoardAccess = require('../middleware/checkBoardAccess');
 
@@ -12,15 +12,14 @@ router.get('/my', auth, async (req, res) => {
     const isAdmin = req.user.role === 'Admin';
     const isManager = req.user.role === 'Manager';
 
-    // Admins/Managers see all items; regular users see only their assigned items
     const userId = String(req.user.id);
     const whereClause = (isAdmin || isManager) ? {} : {
       [Op.or]: [
         { assignedToId: userId },
-        // people column stores JSON array e.g. ["1","2"] or [{"id":"1"},...]
-        { people: { [Op.like]: `%"${userId}"%` } },
-        // person column (legacy string field)
-        { person: userId }
+        { person: userId },
+        // Exact REGEXP searches:
+        { people: { [Op.regexp]: `(^|[^0-9])${userId}([^0-9]|$)` } },
+        { subItemsData: { [Op.regexp]: `(^|[^0-9])${userId}([^0-9]|$)` } }
       ]
     };
 
@@ -31,7 +30,14 @@ router.get('/my', auth, async (req, res) => {
           model: Group,
           include: [{ model: Board }]
         },
-        { model: Item, as: 'parentItem' }
+        {
+          model: Item,
+          as: 'parentItem',
+          include: [{
+            model: Group,
+            include: [{ model: Board }]
+          }]
+        }
       ]
     });
     res.json(items);
@@ -68,9 +74,9 @@ router.post('/', [auth, checkBoardAccess], async (req, res) => {
     const item = await Item.create(itemData);
 
     // If assigned to someone, create notification
-    // SKIP if it's a Team ID (from frontend localstorage, usually 13+ digits)
     const isTeamId = item.assignedToId && String(item.assignedToId).length > 10;
-    if (item.assignedToId && item.assignedToId !== req.user.id && !isTeamId) {
+    if (item.assignedToId && !isTeamId) {
+      // Create notification even if self-assigning, to confirm it works for the USER
       await Notification.create({
         UserId: item.assignedToId,
         content: `You have been assigned a new task: ${item.name}`,
@@ -118,6 +124,9 @@ router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
     for (const [key, value] of Object.entries(req.body)) {
       if (modelFields.includes(key)) {
         updates[key] = value;
+      } else if (key === 'people' || key === 'person') {
+        // Explicitly handle people/person even if not in rawAttributes (though they should be)
+        updates[key] = value;
       } else {
         // Stash unknown/dynamic fields in customFields
         customFields[key] = value;
@@ -131,7 +140,12 @@ router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
 
     await item.update(updates);
 
-    // ─── SYNC: If 'people' column changed, extract IDs and notify each new person ───
+    // ─── SYNC: Handle assignment changes (assignedToId, people, person) ───
+    let finalAssignedId = req.body.assignedToId || null;
+    let finalPeople = req.body.people !== undefined ? req.body.people : item.people;
+    let finalPerson = req.body.person !== undefined ? req.body.person : item.person;
+
+    // 1. Handle "People" column (multi-select)
     if (req.body.people !== undefined) {
       let peopleList = [];
       try {
@@ -139,20 +153,21 @@ router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
         peopleList = Array.isArray(raw) ? raw : (typeof raw === 'string' ? JSON.parse(raw) : []);
       } catch (e) { peopleList = []; }
 
-      // Extract IDs (supports both [{id, name}] and ["1","2"] formats)
       const newPeopleIds = peopleList
         .map(p => String(typeof p === 'object' ? p.id : p))
-        .filter(id => id && id.length <= 10); // skip team IDs (>10 chars)
+        .filter(id => id && id.length <= 10);
 
-      // Auto-sync assignedToId to the first person in the list
-      if (newPeopleIds.length > 0) {
-        const firstPersonId = newPeopleIds[0];
-        if (String(item.assignedToId) !== firstPersonId) {
-          await item.update({ assignedToId: firstPersonId });
-        }
+      // Default the primary assignee to the first person in the list if not explicitly provided
+      if (newPeopleIds.length > 0 && !finalAssignedId) {
+        finalAssignedId = newPeopleIds[0];
       }
 
-      // Get old people list to find newly added people
+      // Update legacy 'person' field to match if needed
+      if (newPeopleIds.length > 0 && !req.body.person) {
+        finalPerson = newPeopleIds[0];
+      }
+
+      // Handle notifications
       let oldPeopleIds = [];
       try {
         const oldRaw = item.people;
@@ -160,7 +175,6 @@ router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
         oldPeopleIds = oldList.map(p => String(typeof p === 'object' ? p.id : p));
       } catch (e) { oldPeopleIds = []; }
 
-      // Send notification to newly added people
       for (const personId of newPeopleIds) {
         if (!oldPeopleIds.includes(personId) && personId !== String(req.user.id)) {
           try {
@@ -175,20 +189,45 @@ router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
       }
     }
 
-    // ─── SYNC: If 'person' (legacy) column changed, also update assignedToId ───
-    if (req.body.person !== undefined && req.body.assignedToId === undefined) {
+    // 2. Handle "Person" column (legacy single select)
+    if (req.body.person !== undefined) {
       const personId = String(req.body.person);
-      if (personId && personId.length <= 10 && String(item.assignedToId) !== personId) {
-        await item.update({ assignedToId: personId });
+      if (personId && personId.length <= 10) {
+        if (!finalAssignedId) finalAssignedId = personId;
+        // If people list is empty or wasn't updated, initialize it with this person
+        if (!req.body.people && (!finalPeople || finalPeople === '[]' || finalPeople === '')) {
+          const user = await User.findByPk(personId);
+          if (user) {
+            finalPeople = JSON.stringify([{ id: user.id, name: user.name }]);
+          }
+        }
+      }
+    }
+
+    // 3. Finalize and persist ALL assignment fields to ensure consistency
+    const updatePayload = {};
+    if (finalAssignedId !== null) updatePayload.assignedToId = finalAssignedId;
+    if (req.body.people !== undefined) updatePayload.people = typeof finalPeople === 'string' ? finalPeople : JSON.stringify(finalPeople);
+    if (req.body.person !== undefined) updatePayload.person = String(finalPerson);
+
+    if (Object.keys(updatePayload).length > 0) {
+      console.log(`[SYNC ASSIGNMENT] Item ${item.id} -> Payload:`, updatePayload);
+      await item.update(updatePayload);
+
+      // Safety: Manual SQL for assignedToId as it's the most critical for visibility
+      if (updatePayload.assignedToId) {
+        await sequelize.query('UPDATE items SET assignedToId = ? WHERE id = ?', {
+          replacements: [updatePayload.assignedToId, item.id],
+          type: sequelize.QueryTypes.UPDATE
+        });
       }
     }
 
     // ─── If assignedToId directly changed, notify the new user ───
-    const newAssignedId = req.body.assignedToId;
-    const isTeamId = newAssignedId && String(newAssignedId).length > 10;
-    if (newAssignedId && String(newAssignedId) !== String(oldAssigneeId) && !isTeamId) {
+    const isTeamId = finalAssignedId && String(finalAssignedId).length > 10;
+    if (finalAssignedId && String(finalAssignedId) !== String(oldAssigneeId) && !isTeamId) {
       await Notification.create({
-        UserId: newAssignedId,
+        UserId: finalAssignedId,
         content: `You have been assigned a task: ${item.name}`,
         type: 'task_assigned',
         link: `/board`

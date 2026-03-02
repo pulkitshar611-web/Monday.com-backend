@@ -6,10 +6,14 @@ const { Notification } = require('../models');
 // @route   GET api/notifications
 router.get('/', auth, async (req, res) => {
   try {
+    const isAdmin = req.user.role === 'Admin' || req.user.role === 'Manager';
+    const whereClause = isAdmin ? {} : { UserId: req.user.id };
+
     const notifications = await Notification.findAll({
-      where: { UserId: req.user.id },
+      where: whereClause,
       order: [['createdAt', 'DESC']]
     });
+    console.log(`[GET NOTIFICATIONS] User: ${req.user.id} Admin: ${isAdmin} Found: ${notifications.length}`);
     res.json(notifications);
   } catch (err) {
     res.status(500).send('Server error');

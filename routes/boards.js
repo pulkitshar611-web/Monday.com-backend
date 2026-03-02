@@ -135,46 +135,50 @@ router.get('/', auth, async (req, res) => {
     // 2. Identify boards where user is assigned to items (check ALL assignment fields)
     const userId = String(req.user.id);
 
-    // Check assignedToId field + people JSON field + person legacy field
+    // FIX: Use RLIKE/REGEXP for exact ID matching in JSON-like strings to avoid partial matches (like 8 matching 18)
     const assignedItems = await Item.findAll({
       where: {
         [Op.or]: [
           { assignedToId: userId },
-          // people column stores JSON like ["1","2"] or [{"id":"1"},...]
-          { people: { [Op.like]: `%"${userId}"%` } },
-          // person column (legacy string field)
-          { person: userId }
+          { people: { [Op.regexp]: `(^|[^0-9])${userId}([^0-9]|$)` } },
+          { person: userId },
+          { subItemsData: { [Op.regexp]: `(^|[^0-9])${userId}([^0-9]|$)` } }
         ]
       },
-      include: [{
-        model: Group,
-        as: 'Group',
-        attributes: ['BoardId']
-      }]
+      include: [
+        {
+          model: Group,
+          attributes: ['BoardId']
+        },
+        {
+          model: Item,
+          as: 'parentItem',
+          include: [{
+            model: Group,
+            attributes: ['BoardId']
+          }]
+        }
+      ]
     });
 
     const assignedBoardIds = [...new Set(assignedItems.map(item => {
-      const group = item.Group || item.group;
-      return group?.BoardId;
+      // 1. Direct group
+      if (item.Group?.BoardId) return item.Group.BoardId;
+      // 2. Parent's group (for subitems)
+      if (item.parentItem?.Group?.BoardId) return item.parentItem.Group.BoardId;
+      return null;
     }).filter(id => id))];
 
     // 3. Filter and mark access
     const filteredBoards = allBoards.filter(b => {
       if (isAdmin || isManager) return true;
-
-      // Check folder permission
-      if (req.user.permissions?.folders && Array.isArray(req.user.permissions.folders)) {
-        if (req.user.permissions.folders.includes(b.folder)) return true;
-      }
-
-      // Check assignment
+      if (String(b.ownerId) === userId) return true;
       return assignedBoardIds.includes(b.id);
     }).map(b => {
       const board = b.toJSON();
 
       const hasFullAccess = isAdmin || isManager ||
-        (req.user.permissions?.folders?.includes(b.folder)) ||
-        String(b.ownerId) === String(req.user.id);
+        String(board.ownerId) === userId;
 
       if (hasFullAccess) {
         board.access = 'full';
