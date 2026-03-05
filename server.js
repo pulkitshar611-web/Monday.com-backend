@@ -34,6 +34,7 @@ app.use('/api/permissions', require('./routes/permissions'));
 app.use('/api/folders', require('./routes/folders'));
 app.use('/api/time', require('./routes/timeTracking'));
 app.use('/api/payroll', require('./routes/payroll'));
+app.use('/api/ai-projects', require('./routes/aiProjects'));
 
 
 

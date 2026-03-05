@@ -28,9 +28,8 @@ router.get('/', auth, async (req, res) => {
             where: {
                 [Op.or]: [
                     { assignedToId: userId },
-                    { people: { [Op.regexp]: `(^|[^0-9])${userId}([^0-9]|$)` } },
-                    { person: userId },
-                    { subItemsData: { [Op.regexp]: `(^|[^0-9])${userId}([^0-9]|$)` } }
+                    { people: { [Op.like]: `%"${userId}"%` } },
+                    { person: userId }
                 ]
             },
             include: [{ model: Group, attributes: ['BoardId'] }]
@@ -49,8 +48,10 @@ router.get('/', auth, async (req, res) => {
         });
         const accessibleFolderNames = new Set(boardsWithAccess.map(b => b.folder));
 
-        // User visibility restricted to boards they own or items they are assigned to.
-        // Removed folder-based permission bypass for non-admins to ensure strict privacy.
+        // 3. Add folders from explicit permissions
+        if (permissions?.folders && Array.isArray(permissions.folders)) {
+            permissions.folders.forEach(f => accessibleFolderNames.add(f));
+        }
 
         const filtered = folders.filter(f => accessibleFolderNames.has(f.name));
         res.json(filtered);

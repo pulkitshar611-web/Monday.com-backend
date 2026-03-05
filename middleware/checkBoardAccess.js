@@ -54,8 +54,14 @@ module.exports = async (req, res, next) => {
         const board = await Board.findByPk(boardId);
         if (!board) return next();
 
-        // Folder-based access is only for Admins/Managers.
-        // Members must have a direct assignment or be the owner.
+        // Check Folder Permission
+        if (permissions?.folders && Array.isArray(permissions.folders)) {
+            if (permissions.folders.includes(board.folder)) {
+                req.boardAccess = 'full';
+                req.isCoordinator = true;
+                return next();
+            }
+        }
 
         if (String(board.ownerId) === String(id)) {
             req.boardAccess = 'full';
@@ -69,9 +75,8 @@ module.exports = async (req, res, next) => {
             where: {
                 [Op.or]: [
                     { assignedToId: userId },
-                    { people: { [Op.regexp]: `(^|[^0-9])${userId}([^0-9]|$)` } },
-                    { person: userId },
-                    { subItemsData: { [Op.regexp]: `(^|[^0-9])${userId}([^0-9]|$)` } }
+                    { people: { [Op.like]: `%"${userId}"%` } },
+                    { person: userId }
                 ]
             },
             include: [{
