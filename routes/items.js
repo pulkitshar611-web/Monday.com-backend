@@ -52,6 +52,8 @@ router.post('/', [auth, checkBoardAccess], async (req, res) => {
     for (const [key, value] of Object.entries(req.body)) {
       if (modelFields.includes(key)) {
         updates[key] = value;
+      } else if (key === 'time_tracking' && !req.body.timeTracking) {
+        updates.timeTracking = value;
       } else {
         customFields[key] = value;
       }
@@ -145,6 +147,9 @@ router.patch('/:id', [auth, checkBoardAccess], async (req, res) => {
     for (const [key, value] of Object.entries(req.body)) {
       if (modelFields.includes(key)) {
         updates[key] = value;
+      } else if (key === 'time_tracking' && !req.body.timeTracking) {
+        // Alias for timeTracking database column
+        updates.timeTracking = value;
       } else {
         // Stash unknown/dynamic fields in customFields
         customFields[key] = value;
