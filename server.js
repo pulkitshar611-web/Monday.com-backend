@@ -246,6 +246,25 @@ sequelize.authenticate()
       console.warn('⚠️  Roles table migration skipped or failed:', error.message);
     }
 
+    // Forms Migrations
+    try {
+      const queryInterfaceF = sequelize.getQueryInterface();
+      const formTableInfo = await queryInterfaceF.describeTable('forms');
+      const formColumns = Object.keys(formTableInfo).map(k => k.toLowerCase());
+
+      if (!formColumns.includes('boardid')) {
+        console.log('Adding missing column: BoardId to forms');
+        await queryInterfaceF.addColumn('forms', 'BoardId', { type: DataTypes.BIGINT, allowNull: true });
+      }
+      if (!formColumns.includes('settings')) {
+        console.log('Adding missing column: settings to forms');
+        await queryInterfaceF.addColumn('forms', 'settings', { type: DataTypes.JSON, allowNull: true });
+      }
+      console.log('✅ Forms table migrations completed successfully.');
+    } catch (error) {
+      console.warn('⚠️  Forms table migration failed:', error.message);
+    }
+
     // TimeSessions Migrations
     try {
       const queryInterface5 = sequelize.getQueryInterface();

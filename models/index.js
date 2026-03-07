@@ -134,6 +134,7 @@ const Form = sequelize.define('Form', {
   title: { type: DataTypes.STRING, allowNull: false },
   description: { type: DataTypes.STRING },
   fields: { type: DataTypes.JSON }, // Store form structure as JSON
+  settings: { type: DataTypes.JSON }, // Store success message, redirect url, etc.
   isPublished: { type: DataTypes.BOOLEAN, defaultValue: false }
 }, {
   tableName: 'forms'
