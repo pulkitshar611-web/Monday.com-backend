@@ -38,6 +38,13 @@ router.post('/start', auth, async (req, res) => {
     }
 });
 
+const formatTimeSeconds = (total) => {
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
 // @route   POST api/time/stop
 // @desc    Stop active time session
 router.post('/stop', auth, async (req, res) => {
@@ -63,7 +70,20 @@ router.post('/stop', auth, async (req, res) => {
         activeSession.isActive = false;
         await activeSession.save();
 
-        res.json(activeSession);
+        // RECALCULATE TOTAL TIME FOR ITEM
+        const allSessions = await TimeSession.findAll({
+            where: { itemId }
+        });
+
+        const totalDuration = allSessions.reduce((acc, sess) => acc + (sess.duration || 0), 0);
+        const timeTrackingStr = formatTimeSeconds(totalDuration);
+
+        await Item.update({ timeTracking: timeTrackingStr }, { where: { id: itemId } });
+
+        res.json({
+            ...activeSession.toJSON(),
+            totalItemTime: timeTrackingStr
+        });
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -71,12 +91,18 @@ router.post('/stop', auth, async (req, res) => {
 });
 
 // @route   GET api/time/item/:itemId
-// @desc    Get all time sessions for an item
+// @desc    Get all time sessions for an item (including sub-items)
 router.get('/item/:itemId', auth, async (req, res) => {
     try {
         const sessions = await TimeSession.findAll({
-            where: { itemId: req.params.itemId },
-            include: [{ model: User, attributes: ['id', 'name', 'avatar'] }]
+            where: {
+                [Op.or]: [
+                    { itemId: req.params.itemId },
+                    { parentItemId: req.params.itemId }
+                ]
+            },
+            include: [{ model: User, attributes: ['id', 'name', 'avatar'] }],
+            order: [['startTime', 'DESC']]
         });
         res.json(sessions);
     } catch (err) {
